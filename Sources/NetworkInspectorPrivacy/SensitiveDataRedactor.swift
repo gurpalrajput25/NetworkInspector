@@ -75,9 +75,15 @@ public struct SensitiveDataRedactor: Sendable {
             url: transaction.request.url,
             method: transaction.request.rawMethod,
             headers: redactedReqHeaders,
+            rawHeaders: transaction.request.rawHeaders,
             body: redactedReqBody,
+            rawBody: transaction.request.rawBody,
             timestamp: transaction.request.timestamp
         )
+
+        // Preserve or extract user details
+        sanitized.userDetails = transaction.userDetails
+            ?? JWTDecoder.extractFromHeaders(transaction.request.rawHeaders)
 
         if let response = transaction.response {
             let redactedResHeaders = redactHeaders(response.headers)
@@ -91,6 +97,11 @@ public struct SensitiveDataRedactor: Sendable {
                 contentLength: response.contentLength,
                 timestamp: response.timestamp
             )
+
+            // Auto-extract user details from login / auth response if not yet detected
+            if sanitized.userDetails == nil, let bodyData = response.body {
+                sanitized.userDetails = JWTDecoder.extractFromResponseBody(bodyData)
+            }
         }
 
         return sanitized

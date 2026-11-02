@@ -53,5 +53,42 @@ final class NetworkLogStoreTests: XCTestCase {
         XCTAssertEqual(result.count, 1)
         XCTAssertEqual(result.first?.response?.statusCode, 500)
     }
+
+    func testCurrentUserPropagationAndPreservation() {
+        let store = NetworkLogStore(maxLogCount: 10)
+        store.clearAll()
+        store.clearCurrentUser()
+
+        // Transaction 1 carries Authorization JWT
+        let authHeaders = [
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3JfOTk4OCIsImVtYWlsIjoidXNlckBleGFtcGxlLmNvbSIsIm5hbWUiOiJHdXJwYWwiLCJyb2xlIjoiYWRtaW4ifQ.sig"
+        ]
+        let req1 = NetworkRequest(url: URL(string: "https://api.example.com/me")!, method: "GET", headers: authHeaders)
+        let tx1 = NetworkTransaction(request: req1)
+
+        store.record(tx1)
+
+        // Verify active currentUser was auto-populated
+        XCTAssertNotNil(store.currentUser)
+        XCTAssertEqual(store.currentUser?.userId, "usr_9988")
+        XCTAssertEqual(store.currentUser?.email, "user@example.com")
+        XCTAssertEqual(store.currentUser?.name, "Gurpal")
+
+        // Stored transaction has user details preserved even though headers were sanitized
+        let storedTx1 = store.transactions.first { $0.id == tx1.id }
+        XCTAssertNotNil(storedTx1?.userDetails)
+        XCTAssertEqual(storedTx1?.userDetails?.name, "Gurpal")
+
+        // Transaction 2 has NO Authorization header (e.g. an image upload or static fetch)
+        let req2 = NetworkRequest(url: URL(string: "https://api.example.com/images/1.png")!, method: "GET")
+        let tx2 = NetworkTransaction(request: req2)
+
+        store.record(tx2)
+
+        // Verify Transaction 2 inherited the session's active logged-in user
+        let storedTx2 = store.transactions.first { $0.id == tx2.id }
+        XCTAssertNotNil(storedTx2?.userDetails, "Subsequent transactions should inherit the currently logged-in user")
+        XCTAssertEqual(storedTx2?.userDetails?.email, "user@example.com")
+    }
 }
 

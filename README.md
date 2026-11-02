@@ -375,13 +375,46 @@ Custom redaction rules can be configured.
 - Restrict capture in production.
 - Export sanitized diagnostic reports.
 
-### JWT User Information
+### JWT User Information & Logged-In User Tracking
 
-NetworkInspector can optionally decode selected JWT claims for debugging purposes.
+NetworkInspector automatically identifies and tracks the authenticated user across network sessions:
 
-JWT decoding alone does not verify token signatures, authenticity, or expiration status against the authentication server.
+1. **Automatic Request Header Parsing**: When any network request includes an `Authorization`, `token`, `x-access-token`, `x-auth-token`, or `id-token` header, the SDK automatically decodes the JWT claims (`sub`, `email`, `name`, `role`, `org`, `exp`).
+2. **Automatic Login Response Extraction**: When authentication endpoints return a JSON response containing `access_token`, `token`, `id_token`, or nested token payloads, the user profile is automatically extracted.
+3. **Explicit User Profile Configuration**: You can programmatically set the currently logged-in user at any time (e.g. upon app login) so that all subsequent traces, diagnostic exports, and Teams notifications immediately show their identity:
 
-User identity information must remain opt-in and should be excluded from diagnostic exports by default.
+```swift
+// Option A: Set user profile explicitly
+NetworkInspector.setLoggedInUser(
+    name: "Gurpal Singh",
+    email: "singhgurpal@seasiainfotech.com",
+    userId: "usr_9988",
+    role: "Admin",
+    organizerId: "org_123"
+)
+
+// Option B: Set active user from a raw JWT token
+NetworkInspector.setActiveJWT(userTokenString)
+
+// Option C: Clear upon user logout
+NetworkInspector.clearCurrentUser()
+```
+
+---
+
+## ⚡️ Postman Direct Import & Live Token Options
+
+NetworkInspector allows you to export and share requests with **unmasked live tokens** so that backend and QA engineers can reproduce issues in Postman in seconds:
+
+1. **In-App Request Detail (cURL Tab)**:
+   - Toggle between **🛡 Masked** (for safe screenshots) and **⚡️ Live Token (Postman)**.
+   - Tap **Copy Live cURL (for Postman)**.
+   - In Postman: Click **Import** → **Raw text** → Paste the cURL command and click **Import**. Postman immediately configures the URL, HTTP method, headers with your active Bearer token, and request body.
+2. **Microsoft Teams Diagnostic Cards**:
+   - In the **Share to Teams** dialog, toggle **Live Token (Direct Postman Import)** on or off.
+   - When enabled, the Adaptive Card sent to your Teams channel contains the unmasked cURL command and full authenticated user profile for 1-click Postman execution.
+3. **Export Center (HAR & cURL)**:
+   - Toggle **Include Live Tokens (for Postman)** when exporting `.har` or `.sh` files to test in Charles, Postman, or Insomnia.
 
 ## Export Formats
 

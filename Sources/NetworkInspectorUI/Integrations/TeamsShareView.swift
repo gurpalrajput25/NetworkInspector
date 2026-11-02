@@ -1,5 +1,6 @@
 import SwiftUI
 import NetworkInspectorCore
+import NetworkInspectorStorage
 import NetworkInspectorIntegrations
 
 public struct TeamsShareView: View {
@@ -8,6 +9,7 @@ public struct TeamsShareView: View {
 
     @State private var developerNote: String = ""
     @State private var webhookURLString: String = ""
+    @State private var includeLiveToken: Bool = true
     @State private var isSending = false
     @State private var errorMessage: String?
     @State private var showSuccessOverlay = false
@@ -19,7 +21,10 @@ public struct TeamsShareView: View {
     }
 
     private var userDetails: JWTUserDetails? {
-        JWTDecoder.extractFromHeaders(transaction.request.headers)
+        transaction.userDetails
+            ?? NetworkLogStore.shared.currentUser
+            ?? JWTDecoder.extractFromHeaders(transaction.request.rawHeaders)
+            ?? JWTDecoder.extractFromHeaders(transaction.request.headers)
     }
 
     private var device: DeviceDiagnosticInfo {
@@ -36,7 +41,12 @@ public struct TeamsShareView: View {
                     // 👤 Authenticated User Details Card (From JWT)
                     if let user = userDetails {
                         userProfileCard(user: user)
+                    } else {
+                        noUserCard
                     }
+
+                    // ⚡️ Live Token (Postman Ready) Toggle
+                    liveTokenCard
 
                     // 📱 Device Diagnostics Card
                     deviceDiagnosticsCard
@@ -188,6 +198,50 @@ public struct TeamsShareView: View {
                 .stroke(Color.purple.opacity(0.25), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var noUserCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "person.crop.circle.badge.questionmark")
+                .font(.system(size: 24))
+                .foregroundColor(.orange)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("No Logged-In User Detected")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Provide an Authorization header or set via NetworkInspector.setLoggedInUser(...)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(12)
+        .background(Color.inspectorSecondaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var liveTokenCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: $includeLiveToken) {
+                HStack(spacing: 10) {
+                    Image(systemName: includeLiveToken ? "bolt.shield.fill" : "shield.slash.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(includeLiveToken ? .green : .secondary)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Live Token (Direct Postman Import)")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text(includeLiveToken ? "Sends unmasked Bearer token in cURL so teammates can import & execute directly in Postman." : "Token is masked ([REDACTED]) for security.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(Color.inspectorSecondaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var deviceDiagnosticsCard: some View {
@@ -356,7 +410,8 @@ public struct TeamsShareView: View {
             transaction: transaction,
             developerNote: developerNote.isEmpty ? nil : developerNote,
             customWebhookURL: url,
-            customUser: userDetails
+            customUser: userDetails,
+            maskTokens: !includeLiveToken
         ) { result in
             isSending = false
             planeOffset = 0

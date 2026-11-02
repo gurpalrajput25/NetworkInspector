@@ -7,6 +7,7 @@ public struct ExportCenterView: View {
 
     @State private var selectedFormat: ExportFormat = .json
     @State private var exportScope: ExportScope = .all
+    @State private var includeLiveTokens: Bool = false
     @State private var previewText: String = ""
 
     public enum ExportScope: String, CaseIterable, Identifiable {
@@ -30,7 +31,11 @@ public struct ExportCenterView: View {
     }
 
     private var exportData: Data {
-        NetworkLogExporter.export(transactions: targetTransactions, format: selectedFormat) ?? Data()
+        NetworkLogExporter.export(
+            transactions: targetTransactions,
+            format: selectedFormat,
+            maskTokens: !includeLiveTokens
+        ) ?? Data()
     }
 
     private var exportString: String {
@@ -68,6 +73,17 @@ public struct ExportCenterView: View {
                         }
                         .pickerStyle(.segmented)
                     }
+
+                    Toggle(isOn: $includeLiveTokens) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Include Live Tokens (for Postman)")
+                                .font(.subheadline.bold())
+                            Text(includeLiveTokens ? "Unmasked tokens included. Ready for direct Postman/Charles import." : "Tokens are masked ([REDACTED]) for safety.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
 
                     HStack {
                         Text("Transactions in export:")

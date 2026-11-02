@@ -56,5 +56,43 @@ public enum NetworkInspector {
     public static var logStore: NetworkLogStore {
         NetworkLogStore.shared
     }
+
+    /// Current authenticated user profile (auto-extracted from request headers or manually set).
+    public static var currentUser: JWTUserDetails? {
+        get { NetworkLogStore.shared.currentUser }
+        set { NetworkLogStore.shared.setCurrentUser(newValue) }
+    }
+
+    /// Explicitly configure the currently logged-in user profile so diagnostic cards and Teams notifications reflect their details.
+    public static func setLoggedInUser(
+        name: String? = nil,
+        email: String? = nil,
+        userId: String? = nil,
+        role: String? = nil,
+        organizerId: String? = nil,
+        rawPayload: [String: String] = [:]
+    ) {
+        let user = JWTUserDetails(
+            userId: userId,
+            email: email,
+            name: name,
+            role: role,
+            organizerId: organizerId,
+            rawPayload: rawPayload
+        )
+        NetworkLogStore.shared.setCurrentUser(user)
+    }
+
+    /// Sets the active user by decoding a live JWT bearer token directly.
+    public static func setActiveJWT(_ jwt: String) {
+        if let user = JWTDecoder.decode(jwt: jwt) {
+            NetworkLogStore.shared.setCurrentUser(user)
+        }
+    }
+
+    /// Clears the currently logged-in user upon logout.
+    public static func clearCurrentUser() {
+        NetworkLogStore.shared.clearCurrentUser()
+    }
 }
 

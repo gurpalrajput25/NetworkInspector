@@ -20,6 +20,7 @@ public struct NetworkTransaction: Identifiable, Codable, Sendable {
     public var error: NetworkError?
     public var metrics: NetworkTaskMetrics?
     public var multipartParts: [MultipartPart]?
+    public var userDetails: JWTUserDetails?
     public var status: TransactionStatus
 
     public init(
@@ -34,6 +35,7 @@ public struct NetworkTransaction: Identifiable, Codable, Sendable {
         error: NetworkError? = nil,
         metrics: NetworkTaskMetrics? = nil,
         multipartParts: [MultipartPart]? = nil,
+        userDetails: JWTUserDetails? = nil,
         status: TransactionStatus = .pending
     ) {
         self.id = id
@@ -47,7 +49,31 @@ public struct NetworkTransaction: Identifiable, Codable, Sendable {
         self.error = error
         self.metrics = metrics
         self.multipartParts = multipartParts
+        self.userDetails = userDetails ?? JWTDecoder.extractFromHeaders(request.rawHeaders)
         self.status = status
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, sessionID, correlationID, clientSource, environment, request, response, duration, error, metrics, multipartParts, userDetails, status
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(UUID.self, forKey: .id)
+        self.sessionID = try container.decode(UUID.self, forKey: .sessionID)
+        self.correlationID = try container.decodeIfPresent(String.self, forKey: .correlationID)
+        self.clientSource = try container.decode(String.self, forKey: .clientSource)
+        self.environment = try container.decodeIfPresent(String.self, forKey: .environment)
+        let decReq = try container.decode(NetworkRequest.self, forKey: .request)
+        self.request = decReq
+        self.response = try container.decodeIfPresent(NetworkResponse.self, forKey: .response)
+        self.duration = try container.decodeIfPresent(TimeInterval.self, forKey: .duration)
+        self.error = try container.decodeIfPresent(NetworkError.self, forKey: .error)
+        self.metrics = try container.decodeIfPresent(NetworkTaskMetrics.self, forKey: .metrics)
+        self.multipartParts = try container.decodeIfPresent([MultipartPart].self, forKey: .multipartParts)
+        self.userDetails = try container.decodeIfPresent(JWTUserDetails.self, forKey: .userDetails)
+            ?? JWTDecoder.extractFromHeaders(decReq.rawHeaders)
+        self.status = try container.decode(TransactionStatus.self, forKey: .status)
     }
 
     public var formattedDuration: String {
@@ -69,11 +95,12 @@ public struct NetworkTransaction: Identifiable, Codable, Sendable {
     }
 
     public func generateCurl(maskTokens: Bool = false) -> String {
+        let headersToUse = maskTokens ? request.headers : request.rawHeaders
         var curl = "curl -X \(request.rawMethod) '\(request.url.absoluteString)'"
 
-        for (key, value) in request.headers {
+        for (key, value) in headersToUse {
             let headerValue: String
-            if maskTokens && (key.lowercased().contains("authorization") || key.lowercased().contains("token") || key.lowercased().contains("cookie")) {
+            if maskTokens && (key.lowercased().contains("authorization") || key.lowercased().contains("token") || key.lowercased().contains("cookie") || key.lowercased().contains("api-key")) {
                 if value.count > 16 {
                     headerValue = "\(value.prefix(6))...\(value.suffix(4))"
                 } else {
@@ -85,7 +112,10 @@ public struct NetworkTransaction: Identifiable, Codable, Sendable {
             curl += " \\\n  -H '\(key): \(headerValue)'"
         }
 
-        if let bodyString = request.bodyString, !bodyString.isEmpty {
+        let bodyData = maskTokens ? request.body : (request.rawBody ?? request.body)
+        if let bodyData = bodyData,
+           let bodyString = String(data: bodyData, encoding: .utf8) ?? String(data: bodyData, encoding: .ascii),
+           !bodyString.isEmpty {
             let escapedBody = bodyString
                 .replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "'", with: "'\\''")

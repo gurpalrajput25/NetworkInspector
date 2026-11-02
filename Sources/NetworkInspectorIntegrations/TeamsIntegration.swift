@@ -28,6 +28,7 @@ public final class TeamsIntegration: @unchecked Sendable {
         developerNote: String? = nil,
         customWebhookURL: URL? = nil,
         customUser: JWTUserDetails? = nil,
+        maskTokens: Bool = false,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
         guard let targetURL = customWebhookURL ?? self.webhookURL else {
@@ -43,7 +44,8 @@ public final class TeamsIntegration: @unchecked Sendable {
             transaction: transaction,
             developerNote: developerNote,
             environmentName: environmentName,
-            customUser: customUser
+            customUser: customUser,
+            maskTokens: maskTokens
         )
 
         guard let bodyData = try? JSONSerialization.data(withJSONObject: payload, options: []) else {

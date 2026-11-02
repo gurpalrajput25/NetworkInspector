@@ -45,12 +45,15 @@ public final class NetworkURLProtocol: URLProtocol, @unchecked Sendable {
 
         // Capture initial request
         if let url = interceptedRequest.url {
+            let capturedHeaders = interceptedRequest.allHTTPHeaderFields ?? [:]
             let req = NetworkRequest(
                 id: transactionID,
                 url: url,
                 method: interceptedRequest.httpMethod ?? "GET",
-                headers: interceptedRequest.allHTTPHeaderFields ?? [:],
+                headers: capturedHeaders,
+                rawHeaders: capturedHeaders,
                 body: interceptedRequest.httpBody,
+                rawBody: interceptedRequest.httpBody,
                 timestamp: startDate
             )
             let transaction = NetworkTransaction(
@@ -137,6 +140,10 @@ extension NetworkURLProtocol: URLSessionDataDelegate {
                         timestamp: Date()
                     )
                     existing.status = (200...399).contains(httpResponse.statusCode) ? .success : .failed
+
+                    if existing.userDetails == nil, !accumulatedData.isEmpty {
+                        existing.userDetails = JWTDecoder.extractFromResponseBody(accumulatedData)
+                    }
                 }
                 NetworkLogStore.shared.record(existing)
             }

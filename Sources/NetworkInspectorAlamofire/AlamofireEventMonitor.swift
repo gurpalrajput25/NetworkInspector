@@ -29,7 +29,9 @@ public final class AlamofireEventMonitor: EventMonitor, @unchecked Sendable {
             url: url,
             method: urlRequest.httpMethod ?? "GET",
             headers: headers,
+            rawHeaders: headers,
             body: urlRequest.httpBody,
+            rawBody: urlRequest.httpBody,
             timestamp: now
         )
 
@@ -85,6 +87,10 @@ public final class AlamofireEventMonitor: EventMonitor, @unchecked Sendable {
                 timestamp: now
             )
             current.status = (200...399).contains(httpResponse.statusCode) ? .success : .failed
+
+            if current.userDetails == nil, let data = response.data {
+                current.userDetails = JWTDecoder.extractFromResponseBody(data)
+            }
         }
 
         if let error = response.error {

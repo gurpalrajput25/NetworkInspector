@@ -8,16 +8,20 @@ public enum TeamsNotificationBuilder {
         transaction: NetworkTransaction,
         developerNote: String? = nil,
         environmentName: String = "Development",
-        customUser: JWTUserDetails? = nil
+        customUser: JWTUserDetails? = nil,
+        maskTokens: Bool = false
     ) -> [String: Any] {
         let note = developerNote?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let curlText = String(transaction.generateCurl(maskTokens: true).prefix(3500))
+        let curlText = String(transaction.generateCurl(maskTokens: maskTokens).prefix(3500))
         let statusCode = transaction.response?.statusCode ?? 0
         let statusText = transaction.response?.statusDescription ?? (transaction.error != nil ? "Failed" : "Pending")
         let formattedDuration = transaction.formattedDuration
 
-        // Extract User Details from JWT or provided fallback
-        let userDetails = customUser ?? JWTDecoder.extractFromHeaders(transaction.request.headers)
+        // Extract User Details from custom, transaction, or headers
+        let userDetails = customUser
+            ?? transaction.userDetails
+            ?? JWTDecoder.extractFromHeaders(transaction.request.rawHeaders)
+            ?? JWTDecoder.extractFromHeaders(transaction.request.headers)
         let device = DeviceDiagnosticInfo.current()
 
         var facts: [[String: String]] = [
@@ -63,7 +67,7 @@ public enum TeamsNotificationBuilder {
             ]
         ]
 
-        // 👤 Authenticated User Details Section (If JWT or user is present)
+        // 👤 Authenticated User Details Section
         if let user = userDetails {
             var userFacts: [[String: String]] = []
             if let name = user.name, !name.isEmpty {
@@ -86,20 +90,48 @@ public enum TeamsNotificationBuilder {
                 userFacts.append(["title": "Token Status:", "value": "\(status) (Expires: \(exp.formatted(date: .abbreviated, time: .shortened)))"])
             }
 
+            // Fallback for custom fields if standard fields were empty
+            if userFacts.isEmpty {
+                for (k, v) in user.rawPayload.prefix(5) where !["exp", "iat", "nbf", "jti"].contains(k) {
+                    userFacts.append(["title": "\(k):", "value": v])
+                }
+            }
+
+            if !userFacts.isEmpty {
+                bodyItems.append([
+                    "type": "Container",
+                    "spacing": "Medium",
+                    "items": [
+                        [
+                            "type": "TextBlock",
+                            "text": "👤 Authenticated User Details",
+                            "weight": "Bolder",
+                            "wrap": true
+                        ],
+                        [
+                            "type": "FactSet",
+                            "spacing": "Small",
+                            "facts": userFacts
+                        ]
+                    ]
+                ])
+            }
+        } else {
             bodyItems.append([
                 "type": "Container",
                 "spacing": "Medium",
                 "items": [
                     [
                         "type": "TextBlock",
-                        "text": "👤 Authenticated User (JWT Decoded)",
+                        "text": "👤 Authenticated User",
                         "weight": "Bolder",
                         "wrap": true
                     ],
                     [
-                        "type": "FactSet",
-                        "spacing": "Small",
-                        "facts": userFacts
+                        "type": "TextBlock",
+                        "text": "No authenticated user detected. Set via NetworkInspector.setLoggedInUser(...) or pass Bearer token in request headers.",
+                        "isSubtle": true,
+                        "wrap": true
                     ]
                 ]
             ])
@@ -151,15 +183,27 @@ public enum TeamsNotificationBuilder {
             ])
         }
 
-        // cURL Section
+        // cURL Section (With Live Token / Masked state)
+        let curlTitle = maskTokens ? "📡 cURL (Masked)" : "📡 cURL (Live Token - Ready for Postman)"
+        let curlSubtitle = maskTokens
+            ? "Sensitive tokens are masked for security."
+            : "⚡️ Contains active unmasked token. Directly importable in Postman (Import → Raw text)."
+
         bodyItems.append([
             "type": "Container",
             "spacing": "Medium",
             "items": [
                 [
                     "type": "TextBlock",
-                    "text": "📡 cURL (Copy & Execute)",
+                    "text": curlTitle,
                     "weight": "Bolder",
+                    "wrap": true
+                ],
+                [
+                    "type": "TextBlock",
+                    "text": curlSubtitle,
+                    "isSubtle": true,
+                    "spacing": "None",
                     "wrap": true
                 ],
                 [
@@ -172,20 +216,24 @@ public enum TeamsNotificationBuilder {
             ]
         ])
 
-        // How to use
+        // How to use in Postman
+        let testInstructions = maskTokens
+            ? "• Copy the cURL above\n• Replace [REDACTED] tokens with active credentials\n• Run in Terminal or Postman"
+            : "• Copy the cURL above\n• In Postman: File → Import → Raw text → Paste and Send\n• Or execute directly in Terminal"
+
         bodyItems.append([
             "type": "Container",
             "spacing": "Medium",
             "items": [
                 [
                     "type": "TextBlock",
-                    "text": "💡 How to Test",
+                    "text": "💡 How to Test in Postman",
                     "weight": "Bolder",
                     "wrap": true
                 ],
                 [
                     "type": "TextBlock",
-                    "text": "• Copy the cURL above\n• Paste into Terminal or Postman (Import → Raw text)",
+                    "text": testInstructions,
                     "wrap": true
                 ]
             ]

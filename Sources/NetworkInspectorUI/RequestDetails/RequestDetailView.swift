@@ -8,6 +8,7 @@ public struct RequestDetailView: View {
 
     @State private var selectedTab = 0
     @State private var showingTeamsShare = false
+    @State private var isLiveCurlMode = true
 
     public init(transaction: NetworkTransaction) {
         self.transaction = transaction
@@ -205,42 +206,79 @@ public struct RequestDetailView: View {
     }
 
     private var curlSection: some View {
-        let curlCommand = transaction.generateCurl(maskTokens: false)
+        let liveCurlCommand = transaction.generateCurl(maskTokens: false)
         let maskedCurlCommand = transaction.generateCurl(maskTokens: true)
 
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("cURL Command")
-                    .font(.headline)
-                Spacer()
-                CopyButton(textToCopy: maskedCurlCommand)
+        return VStack(alignment: .leading, spacing: 14) {
+            Picker("cURL Mode", selection: $isLiveCurlMode) {
+                Text("⚡️ Live Token (Postman)").tag(true)
+                Text("🛡 Masked").tag(false)
             }
+            .pickerStyle(.segmented)
 
-            Text("Masked tokens for safety. Copy command to execute directly in Terminal or Postman:")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            if isLiveCurlMode {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Live cURL Command")
+                            .font(.headline)
+                        Text("Directly importable into Postman with active authorization.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    CopyButton(textToCopy: liveCurlCommand)
+                }
 
-            ScrollView(.horizontal, showsIndicators: true) {
-                Text(maskedCurlCommand)
-                    .font(.system(size: 12, design: .monospaced))
-                    .padding(12)
-                    .textSelection(.enabled)
+                ScrollView(.horizontal, showsIndicators: true) {
+                    Text(liveCurlCommand)
+                        .font(.system(size: 12, design: .monospaced))
+                        .padding(12)
+                        .textSelection(.enabled)
+                }
+                .background(Color.inspectorCardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(.blue)
+                    Text("In Postman: Click Import → Raw text → Paste to run request immediately.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(8)
+                .background(Color.blue.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                    Text("Contains live credentials. Handle with care.")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                }
+            } else {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Masked cURL Command")
+                            .font(.headline)
+                        Text("Tokens masked for safe developer sharing and bug reports.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    CopyButton(textToCopy: maskedCurlCommand)
+                }
+
+                ScrollView(.horizontal, showsIndicators: true) {
+                    Text(maskedCurlCommand)
+                        .font(.system(size: 12, design: .monospaced))
+                        .padding(12)
+                        .textSelection(.enabled)
+                }
+                .background(Color.inspectorCardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
-            .background(Color.inspectorCardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-
-            Divider().padding(.vertical, 8)
-
-            HStack {
-                Text("Raw cURL (Live Token)")
-                    .font(.subheadline.bold())
-                Spacer()
-                CopyButton(textToCopy: curlCommand)
-            }
-
-            Text("⚠️ Contains active credentials. Handle with care.")
-                .font(.caption2)
-                .foregroundColor(.orange)
         }
         .padding()
         .background(Color.inspectorSecondaryBackground)

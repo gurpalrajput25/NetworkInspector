@@ -9,6 +9,7 @@ public final class NetworkLogStore: ObservableObject, @unchecked Sendable {
     @Published public private(set) var transactions: [NetworkTransaction] = []
     @Published public private(set) var sessions: [NetworkSession] = []
     @Published public private(set) var activeSession: NetworkSession
+    @Published public var currentUser: JWTUserDetails?
 
     private let lock = NSRecursiveLock()
     private var maxLogCount: Int = 1000
@@ -40,6 +41,19 @@ public final class NetworkLogStore: ObservableObject, @unchecked Sendable {
         self.isPersistenceEnabled = enablePersistence
     }
 
+    public func setCurrentUser(_ user: JWTUserDetails?) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.currentUser = user
+        DispatchQueue.main.async {
+            self.objectWillChange.send()
+        }
+    }
+
+    public func clearCurrentUser() {
+        setCurrentUser(nil)
+    }
+
     public func startNewSession(name: String? = nil) {
         lock.lock()
         defer { lock.unlock() }
@@ -64,7 +78,16 @@ public final class NetworkLogStore: ObservableObject, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        let sanitized = redactor.sanitizeTransaction(transaction)
+        var sanitized = redactor.sanitizeTransaction(transaction)
+
+        // Automatically update active currentUser if this transaction has user details
+        if let user = sanitized.userDetails ?? transaction.userDetails {
+            self.currentUser = user
+            sanitized.userDetails = user
+        } else if sanitized.userDetails == nil, let activeUser = self.currentUser {
+            // Inherit the session's active logged-in user profile
+            sanitized.userDetails = activeUser
+        }
 
         if let index = transactions.firstIndex(where: { $0.id == sanitized.id }) {
             transactions[index] = sanitized

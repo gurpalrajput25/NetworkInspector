@@ -36,6 +36,10 @@ final class NetworkRequestTests: XCTestCase {
         XCTAssertTrue(curlMasked.contains("curl -X POST 'https://api.example.com/login'"))
         XCTAssertFalse(curlMasked.contains("secret_token_12345"))
         XCTAssertTrue(curlMasked.contains("Bearer"))
+
+        // Unmasked Live Token (for direct Postman execution)
+        let curlLive = transaction.generateCurl(maskTokens: false)
+        XCTAssertTrue(curlLive.contains("Bearer secret_token_12345"), "Live cURL must contain the exact live token for direct Postman import")
     }
 }
 
