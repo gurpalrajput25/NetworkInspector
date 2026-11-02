@@ -12,7 +12,8 @@ public enum TeamsNotificationBuilder {
         maskTokens: Bool = false
     ) -> [String: Any] {
         let note = developerNote?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let curlText = String(transaction.generateCurl(maskTokens: maskTokens).prefix(3500))
+        let multiLineCurl = String(transaction.generateCurl(maskTokens: maskTokens, singleLine: false).prefix(3500))
+        let singleLineCurl = String(transaction.generateCurl(maskTokens: maskTokens, singleLine: true).prefix(3500))
         let statusCode = transaction.response?.statusCode ?? 0
         let statusText = transaction.response?.statusDescription ?? (transaction.error != nil ? "Failed" : "Pending")
         let formattedDuration = transaction.formattedDuration
@@ -84,10 +85,17 @@ public enum TeamsNotificationBuilder {
             }
             if let org = user.organizerId, !org.isEmpty {
                 userFacts.append(["title": "Organizer ID:", "value": org])
+            } else if let orgParam = transaction.request.queryItems["organizer_id"], !orgParam.isEmpty {
+                userFacts.append(["title": "Organizer ID:", "value": orgParam])
             }
             if let exp = user.expirationDate {
                 let status = user.isExpired ? "⚠️ Expired" : "Active"
                 userFacts.append(["title": "Token Status:", "value": "\(status) (Expires: \(exp.formatted(date: .abbreviated, time: .shortened)))"])
+            } else {
+                userFacts.append(["title": "Token Status:", "value": "Active"])
+            }
+            if let iat = user.issuedAt {
+                userFacts.append(["title": "Issued At:", "value": iat.formatted(date: .abbreviated, time: .shortened)])
             }
 
             // Fallback for custom fields if standard fields were empty
@@ -187,7 +195,10 @@ public enum TeamsNotificationBuilder {
         let curlTitle = maskTokens ? "📡 cURL (Masked)" : "📡 cURL (Live Token - Ready for Postman)"
         let curlSubtitle = maskTokens
             ? "Sensitive tokens are masked for security."
-            : "⚡️ Contains active unmasked token. Directly importable in Postman (Import → Raw text)."
+            : "⚡️ Contains active unmasked token. Click 'Copy' on the code block to import directly into Postman or Terminal."
+
+        let multiLineCode = "```bash\n\(multiLineCurl)\n```"
+        let singleLineCode = "```bash\n\(singleLineCurl)\n```"
 
         bodyItems.append([
             "type": "Container",
@@ -208,18 +219,28 @@ public enum TeamsNotificationBuilder {
                 ],
                 [
                     "type": "TextBlock",
-                    "text": curlText,
-                    "wrap": true,
-                    "fontType": "Monospace",
-                    "spacing": "Small"
+                    "text": multiLineCode,
+                    "wrap": true
+                ],
+                [
+                    "type": "TextBlock",
+                    "text": "📋 1-Line cURL (Guaranteed 1-Click Import — no line breaks or shell escaping):",
+                    "weight": "Bolder",
+                    "spacing": "Small",
+                    "wrap": true
+                ],
+                [
+                    "type": "TextBlock",
+                    "text": singleLineCode,
+                    "wrap": true
                 ]
             ]
         ])
 
         // How to use in Postman
         let testInstructions = maskTokens
-            ? "• Copy the cURL above\n• Replace [REDACTED] tokens with active credentials\n• Run in Terminal or Postman"
-            : "• Copy the cURL above\n• In Postman: File → Import → Raw text → Paste and Send\n• Or execute directly in Terminal"
+            ? "• Copy the 1-Line cURL above\n• Replace [REDACTED] tokens with active credentials\n• Run in Terminal or Postman"
+            : "• Copy either cURL code box above\n• In Postman: File → Import → Raw text → Paste and Send\n• Tip: Use the 1-Line cURL if copying across devices to avoid accidental newline wrapping"
 
         bodyItems.append([
             "type": "Container",

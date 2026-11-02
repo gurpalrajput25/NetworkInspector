@@ -40,6 +40,12 @@ final class NetworkRequestTests: XCTestCase {
         // Unmasked Live Token (for direct Postman execution)
         let curlLive = transaction.generateCurl(maskTokens: false)
         XCTAssertTrue(curlLive.contains("Bearer secret_token_12345"), "Live cURL must contain the exact live token for direct Postman import")
+
+        // Single-line cURL (for 1-click Postman import with no line breaks)
+        let curlSingleLine = transaction.generateCurl(maskTokens: false, singleLine: true)
+        XCTAssertFalse(curlSingleLine.contains("\n"), "Single-line cURL must have zero newlines")
+        XCTAssertTrue(curlSingleLine.contains("Bearer secret_token_12345"))
+        XCTAssertTrue(curlSingleLine.hasPrefix("curl -X POST \"https://api.example.com/login\""))
     }
 }
 

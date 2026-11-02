@@ -206,8 +206,10 @@ public struct RequestDetailView: View {
     }
 
     private var curlSection: some View {
-        let liveCurlCommand = transaction.generateCurl(maskTokens: false)
-        let maskedCurlCommand = transaction.generateCurl(maskTokens: true)
+        let liveCurlCommand = transaction.generateCurl(maskTokens: false, singleLine: false)
+        let singleLineLive = transaction.generateCurl(maskTokens: false, singleLine: true)
+        let maskedCurlCommand = transaction.generateCurl(maskTokens: true, singleLine: false)
+        let singleLineMasked = transaction.generateCurl(maskTokens: true, singleLine: true)
 
         return VStack(alignment: .leading, spacing: 14) {
             Picker("cURL Mode", selection: $isLiveCurlMode) {
@@ -237,6 +239,29 @@ public struct RequestDetailView: View {
                 }
                 .background(Color.inspectorCardBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                HStack {
+                    Text("Need a single line without continuation backslashes?")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button {
+                        #if canImport(UIKit)
+                        UIPasteboard.general.string = singleLineLive
+                        #endif
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bolt.fill")
+                            Text("Copy 1-Line cURL")
+                        }
+                        .font(.caption.bold())
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.accentColor)
+                        .foregroundColor(.white)
+                        .clipShape(Capsule())
+                    }
+                }
 
                 HStack(spacing: 8) {
                     Image(systemName: "info.circle.fill")
@@ -278,6 +303,26 @@ public struct RequestDetailView: View {
                 }
                 .background(Color.inspectorCardBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                HStack {
+                    Spacer()
+                    Button {
+                        #if canImport(UIKit)
+                        UIPasteboard.general.string = singleLineMasked
+                        #endif
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc.on.doc")
+                            Text("Copy 1-Line Masked")
+                        }
+                        .font(.caption.bold())
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.gray.opacity(0.3))
+                        .foregroundColor(.primary)
+                        .clipShape(Capsule())
+                    }
+                }
             }
         }
         .padding()

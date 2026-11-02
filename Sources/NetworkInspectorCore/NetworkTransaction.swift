@@ -94,35 +94,62 @@ public struct NetworkTransaction: Identifiable, Codable, Sendable {
         ByteCountFormatter.string(fromByteCount: Int64(request.bodySize), countStyle: .file)
     }
 
-    public func generateCurl(maskTokens: Bool = false) -> String {
+    public func generateCurl(maskTokens: Bool = false, singleLine: Bool = false) -> String {
         let headersToUse = maskTokens ? request.headers : request.rawHeaders
-        var curl = "curl -X \(request.rawMethod) '\(request.url.absoluteString)'"
 
-        for (key, value) in headersToUse {
-            let headerValue: String
-            if maskTokens && (key.lowercased().contains("authorization") || key.lowercased().contains("token") || key.lowercased().contains("cookie") || key.lowercased().contains("api-key")) {
-                if value.count > 16 {
-                    headerValue = "\(value.prefix(6))...\(value.suffix(4))"
-                } else {
-                    headerValue = "[REDACTED]"
-                }
-            } else {
-                headerValue = value
+        if singleLine {
+            var curl = "curl -X \(request.rawMethod) \"\(request.url.absoluteString)\""
+            for (key, value) in headersToUse {
+                let headerValue = maskHeaderIfNeeded(key: key, value: value, maskTokens: maskTokens)
+                let escaped = headerValue
+                    .replacingOccurrences(of: "\\", with: "\\\\")
+                    .replacingOccurrences(of: "\"", with: "\\\"")
+                curl += " -H \"\(key): \(escaped)\""
             }
-            curl += " \\\n  -H '\(key): \(headerValue)'"
+            let bodyData = maskTokens ? request.body : (request.rawBody ?? request.body)
+            if let bodyData = bodyData,
+               let bodyString = String(data: bodyData, encoding: .utf8) ?? String(data: bodyData, encoding: .ascii),
+               !bodyString.isEmpty {
+                let escapedBody = bodyString
+                    .replacingOccurrences(of: "\\", with: "\\\\")
+                    .replacingOccurrences(of: "\"", with: "\\\"")
+                    .replacingOccurrences(of: "\n", with: "\\n")
+                    .replacingOccurrences(of: "\r", with: "\\r")
+                curl += " --data \"\(escapedBody)\""
+            }
+            return curl
+        } else {
+            var curl = "curl -X \(request.rawMethod) '\(request.url.absoluteString)'"
+            for (key, value) in headersToUse {
+                let headerValue = maskHeaderIfNeeded(key: key, value: value, maskTokens: maskTokens)
+                let escaped = headerValue
+                    .replacingOccurrences(of: "'", with: "'\\''")
+                curl += " \\\n  -H '\(key): \(escaped)'"
+            }
+            let bodyData = maskTokens ? request.body : (request.rawBody ?? request.body)
+            if let bodyData = bodyData,
+               let bodyString = String(data: bodyData, encoding: .utf8) ?? String(data: bodyData, encoding: .ascii),
+               !bodyString.isEmpty {
+                let escapedBody = bodyString
+                    .replacingOccurrences(of: "\\", with: "\\\\")
+                    .replacingOccurrences(of: "'", with: "'\\''")
+                curl += " \\\n  --data '\(escapedBody)'"
+            }
+            return curl
         }
+    }
 
-        let bodyData = maskTokens ? request.body : (request.rawBody ?? request.body)
-        if let bodyData = bodyData,
-           let bodyString = String(data: bodyData, encoding: .utf8) ?? String(data: bodyData, encoding: .ascii),
-           !bodyString.isEmpty {
-            let escapedBody = bodyString
-                .replacingOccurrences(of: "\\", with: "\\\\")
-                .replacingOccurrences(of: "'", with: "'\\''")
-            curl += " \\\n  --data '\(escapedBody)'"
+    private func maskHeaderIfNeeded(key: String, value: String, maskTokens: Bool) -> String {
+        guard maskTokens else { return value }
+        let lower = key.lowercased()
+        if lower.contains("authorization") || lower.contains("token") || lower.contains("cookie") || lower.contains("api-key") {
+            if value.count > 16 {
+                return "\(value.prefix(6))...\(value.suffix(4))"
+            } else {
+                return "[REDACTED]"
+            }
         }
-
-        return curl
+        return value
     }
 }
 

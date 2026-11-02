@@ -136,8 +136,10 @@ public struct TeamsShareView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
-                        Text(user.name ?? user.email ?? "Authenticated User")
+                        let title = user.name ?? user.email ?? (user.userId != nil ? "User: \(user.userId!)" : "Authenticated User")
+                        Text(title)
                             .font(.system(size: 15, weight: .bold))
+                            .lineLimit(1)
                         if let role = user.role {
                             Text(role.uppercased())
                                 .font(.system(size: 9, weight: .heavy))
@@ -184,7 +186,7 @@ public struct TeamsShareView: View {
                         .foregroundColor(.secondary)
                 }
                 Spacer()
-                if let org = user.organizerId {
+                if let org = user.organizerId ?? transaction.request.queryItems["organizer_id"] {
                     Text("Org: \(org)")
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.secondary)
