@@ -1,0 +1,375 @@
+import SwiftUI
+import NetworkInspectorCore
+import NetworkInspectorIntegrations
+
+public struct TeamsShareView: View {
+    public let transaction: NetworkTransaction
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var developerNote: String = ""
+    @State private var webhookURLString: String = ""
+    @State private var isSending = false
+    @State private var errorMessage: String?
+    @State private var showSuccessOverlay = false
+    @State private var planeOffset: CGFloat = 0
+    @State private var pulseGlow = false
+
+    public init(transaction: NetworkTransaction) {
+        self.transaction = transaction
+    }
+
+    private var userDetails: JWTUserDetails? {
+        JWTDecoder.extractFromHeaders(transaction.request.headers)
+    }
+
+    private var device: DeviceDiagnosticInfo {
+        DeviceDiagnosticInfo.current()
+    }
+
+    public var body: some View {
+        ZStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Header details
+                    headerCard
+
+                    // 👤 Authenticated User Details Card (From JWT)
+                    if let user = userDetails {
+                        userProfileCard(user: user)
+                    }
+
+                    // 📱 Device Diagnostics Card
+                    deviceDiagnosticsCard
+
+                    // Webhook Configuration
+                    webhookConfigurationCard
+
+                    // Note Input
+                    noteInputCard
+
+                    // Error message
+                    if let err = errorMessage {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.red)
+                            Text(err)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        .padding(.horizontal, 4)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+
+                    // Send Button with Launch Animation
+                    sendButton
+                }
+                .padding()
+            }
+
+            // Success Overlay Animation
+            if showSuccessOverlay {
+                successOverlayView
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .navigationTitle("Share to Teams")
+        .inspectorNavigationTitleDisplayModeInline()
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
+        }
+        .onAppear {
+            if let saved = TeamsIntegration.shared.webhookURL?.absoluteString {
+                webhookURLString = saved
+            }
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                pulseGlow = true
+            }
+        }
+    }
+
+    // MARK: - Subviews
+
+    private var headerCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                MethodBadgeView(method: transaction.request.rawMethod)
+                StatusBadgeView(statusCode: transaction.response?.statusCode)
+                Text(transaction.request.path)
+                    .font(.headline)
+                    .lineLimit(1)
+            }
+
+            Text("Send diagnostic trace, decoded JWT user identity, device profile & cURL to Teams.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding()
+        .background(Color.inspectorSecondaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func userProfileCard(user: JWTUserDetails) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 42, height: 42)
+                        .shadow(color: .purple.opacity(pulseGlow ? 0.4 : 0.1), radius: 6)
+
+                    Image(systemName: "person.crop.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(user.name ?? user.email ?? "Authenticated User")
+                            .font(.system(size: 15, weight: .bold))
+                        if let role = user.role {
+                            Text(role.uppercased())
+                                .font(.system(size: 9, weight: .heavy))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.purple.opacity(0.15))
+                                .foregroundColor(.purple)
+                                .clipShape(Capsule())
+                        }
+                    }
+
+                    if let email = user.email {
+                        Text(email)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(user.isExpired ? Color.red : Color.green)
+                            .frame(width: 6, height: 6)
+                        Text(user.isExpired ? "Token Expired" : "Active JWT")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(user.isExpired ? .red : .green)
+                    }
+                    if let exp = user.expirationDate {
+                        Text("Exp: \(exp.formatted(date: .omitted, time: .shortened))")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            Divider()
+
+            HStack {
+                if let uid = user.userId {
+                    Text("UID: \(uid)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                if let org = user.organizerId {
+                    Text("Org: \(org)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(14)
+        .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.purple.opacity(0.25), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var deviceDiagnosticsCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "iphone.gen3")
+                .font(.system(size: 18))
+                .foregroundColor(.blue)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(device.deviceModel) • \(device.systemName) \(device.systemVersion)")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("\(device.appName) v\(device.appVersion) (\(device.buildNumber)) • \(device.timeZone)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "checkmark.shield.fill")
+                .font(.system(size: 14))
+                .foregroundColor(.green)
+        }
+        .padding(12)
+        .background(Color.inspectorSecondaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var webhookConfigurationCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Teams / Power Automate Webhook URL")
+                .font(.caption.bold())
+                .foregroundColor(.secondary)
+
+            TextField("https://...webhook.office.com/...", text: $webhookURLString)
+                .font(.system(size: 13, design: .monospaced))
+                .padding(10)
+                .background(Color.inspectorCardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .autocorrectionDisabled()
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                #endif
+        }
+        .padding()
+        .background(Color.inspectorSecondaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var noteInputCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Developer / QA Note (Optional)")
+                .font(.caption.bold())
+                .foregroundColor(.secondary)
+
+            TextEditor(text: $developerNote)
+                .frame(height: 80)
+                .padding(4)
+                .background(Color.inspectorCardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .padding()
+        .background(Color.inspectorSecondaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var sendButton: some View {
+        Button {
+            sendToTeams()
+        } label: {
+            HStack(spacing: 8) {
+                if isSending {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                } else {
+                    Image(systemName: "paperplane.fill")
+                        .offset(x: planeOffset, y: -planeOffset * 0.5)
+                }
+                Text(isSending ? "Dispatching Trace to Teams..." : "Send Diagnostic Card to Teams")
+            }
+            .font(.headline)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(
+                LinearGradient(
+                    colors: isSending ? [.gray] : [Color.blue, Color.purple],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .foregroundColor(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .shadow(color: isSending ? .clear : .purple.opacity(0.3), radius: 8, y: 4)
+        }
+        .disabled(isSending)
+    }
+
+    private var successOverlayView: some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 72, height: 72)
+                        .scaleEffect(pulseGlow ? 1.05 : 0.95)
+
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(.white)
+                }
+
+                Text("Sent to Teams!")
+                    .font(.title2.bold())
+                    .foregroundColor(.white)
+
+                Text("Diagnostic trace, user profile, and cURL were delivered.")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+
+                Button {
+                    withAnimation {
+                        showSuccessOverlay = false
+                        dismiss()
+                    }
+                } label: {
+                    Text("Done")
+                        .font(.headline)
+                        .padding(.horizontal, 32)
+                        .padding(.vertical, 10)
+                        .background(Color.white)
+                        .foregroundColor(.black)
+                        .clipShape(Capsule())
+                }
+                .padding(.top, 8)
+            }
+            .padding(28)
+            .background(Color.inspectorCardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .shadow(radius: 20)
+            .padding(.horizontal, 32)
+        }
+    }
+
+    private func sendToTeams() {
+        errorMessage = nil
+        let trimmedURL = webhookURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmedURL), url.scheme?.hasPrefix("http") == true else {
+            withAnimation(.spring()) {
+                errorMessage = "Please enter a valid HTTP/HTTPS Teams webhook URL."
+            }
+            return
+        }
+
+        TeamsIntegration.shared.webhookURL = url
+        isSending = true
+
+        withAnimation(.easeOut(duration: 0.6)) {
+            planeOffset = 15
+        }
+
+        TeamsIntegration.shared.send(
+            transaction: transaction,
+            developerNote: developerNote.isEmpty ? nil : developerNote,
+            customWebhookURL: url,
+            customUser: userDetails
+        ) { result in
+            isSending = false
+            planeOffset = 0
+            switch result {
+            case .success:
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                    showSuccessOverlay = true
+                }
+            case .failure(let error):
+                withAnimation(.spring()) {
+                    errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+}

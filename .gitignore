@@ -1,0 +1,24 @@
+# Xcode
+xcuserdata/
+*.xcworkspace
+*.xcuserdatad
+*.xcuserstate
+*.moved-aside
+*.xccheckout
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/xcode/
+.swiftpm/configuration/
+
+# macOS Finder & System files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
