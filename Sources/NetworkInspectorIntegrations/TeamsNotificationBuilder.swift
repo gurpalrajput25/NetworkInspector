@@ -12,8 +12,8 @@ public enum TeamsNotificationBuilder {
         maskTokens: Bool = false
     ) -> [String: Any] {
         let note = developerNote?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let multiLineCurl = String(transaction.generateCurl(maskTokens: maskTokens, singleLine: false).prefix(3500))
-        let singleLineCurl = String(transaction.generateCurl(maskTokens: maskTokens, singleLine: true).prefix(3500))
+        let multiLineCurl = String(transaction.generateCurl(maskTokens: maskTokens, singleLine: false).prefix(4000))
+        let singleLineCurl = String(transaction.generateCurl(maskTokens: maskTokens, singleLine: true).prefix(4000))
         let statusCode = transaction.response?.statusCode ?? 0
         let statusText = transaction.response?.statusDescription ?? (transaction.error != nil ? "Failed" : "Pending")
         let formattedDuration = transaction.formattedDuration
@@ -25,50 +25,229 @@ public enum TeamsNotificationBuilder {
             ?? JWTDecoder.extractFromHeaders(transaction.request.headers)
         let device = DeviceDiagnosticInfo.current()
 
-        var facts: [[String: String]] = [
-            ["title": "Method & Path:", "value": "\(transaction.request.rawMethod) \(transaction.request.path)"],
-            ["title": "Status:", "value": "\(statusCode) (\(statusText))"],
-            ["title": "Duration:", "value": formattedDuration],
-            ["title": "Host:", "value": transaction.request.host],
-            ["title": "Environment:", "value": environmentName],
-            ["title": "Client Source:", "value": transaction.clientSource]
-        ]
-
-        if let err = transaction.error {
-            facts.append(["title": "Error:", "value": err.localizedDescription])
+        // Status styling
+        let statusEmoji: String
+        if statusCode >= 500 {
+            statusEmoji = "🔴"
+        } else if statusCode >= 400 {
+            statusEmoji = "🟠"
+        } else if statusCode >= 200 && statusCode < 300 {
+            statusEmoji = "🟢"
+        } else if transaction.error != nil {
+            statusEmoji = "❌"
+        } else {
+            statusEmoji = "🔵"
         }
 
-        var bodyItems: [[String: Any]] = [
-            // Header Container
-            [
+        let statusSummary = "\(statusEmoji) \(statusCode > 0 ? "\(statusCode) \(statusText)" : (transaction.error != nil ? "Network Error" : "Pending")) • \(formattedDuration)"
+
+        var bodyItems: [[String: Any]] = []
+
+        // 1. 🚀 HERO HEADER CONTAINER (Immediate visual feedback)
+        bodyItems.append([
+            "type": "Container",
+            "style": "emphasis",
+            "items": [
+                [
+                    "type": "TextBlock",
+                    "text": statusSummary,
+                    "weight": "Bolder",
+                    "size": "Medium",
+                    "wrap": true
+                ],
+                [
+                    "type": "TextBlock",
+                    "text": "\(transaction.request.rawMethod) \(transaction.request.path)",
+                    "weight": "Bolder",
+                    "size": "Large",
+                    "spacing": "None",
+                    "wrap": true
+                ],
+                [
+                    "type": "TextBlock",
+                    "text": "Host: \(transaction.request.host) • Env: \(environmentName) • Source: \(transaction.clientSource)",
+                    "isSubtle": true,
+                    "spacing": "None",
+                    "wrap": true
+                ]
+            ]
+        ])
+
+        // 2. 📋 POSTMAN 1-CLICK cURL (Primary Action Box — zero editing needed)
+        let singleLineCodeBlock: [String: Any] = [
+            "type": "CodeBlock",
+            "language": "bash",
+            "codeSnippet": singleLineCurl,
+            "fallback": [
+                "type": "TextBlock",
+                "text": "```\n\(singleLineCurl)\n```",
+                "fontType": "Monospace",
+                "wrap": false
+            ]
+        ]
+
+        let postmanTitle = maskTokens ? "📋 Postman cURL (Masked)" : "📋 Postman cURL (1-Click Direct Import • Zero Editing)"
+        let postmanSubtitle = maskTokens
+            ? "⚠️ Tokens are masked for privacy. Replace [REDACTED] in Postman."
+            : "⚡️ Active live token included. Ready for direct Postman execution with 0 manual adjustments."
+
+        let postmanQuickGuide = """
+        👉 **Instant Postman Import (2 Seconds):**
+        1. Click **'Copy code'** on the top-right of the box above.
+        2. In Postman: Paste directly into the **URL address bar** (`Cmd+V` / `Ctrl+V`) or click **Import → Raw text**.
+        3. Method, URL, query params, headers, and authorization are 100% pre-configured. Just hit **Send**!
+        """
+
+        bodyItems.append([
+            "type": "Container",
+            "spacing": "Medium",
+            "items": [
+                [
+                    "type": "TextBlock",
+                    "text": postmanTitle,
+                    "weight": "Bolder",
+                    "size": "Medium",
+                    "wrap": true
+                ],
+                [
+                    "type": "TextBlock",
+                    "text": postmanSubtitle,
+                    "isSubtle": true,
+                    "spacing": "None",
+                    "wrap": true
+                ],
+                singleLineCodeBlock,
+                [
+                    "type": "TextBlock",
+                    "text": postmanQuickGuide,
+                    "isSubtle": true,
+                    "spacing": "Small",
+                    "wrap": true
+                ]
+            ]
+        ])
+
+        // 3. 🔍 FORMATTED MULTI-LINE cURL (For Terminal execution & code review)
+        let multiLineCodeBlock: [String: Any] = [
+            "type": "CodeBlock",
+            "language": "bash",
+            "codeSnippet": multiLineCurl,
+            "fallback": [
+                "type": "TextBlock",
+                "text": "```\n\(multiLineCurl)\n```",
+                "fontType": "Monospace",
+                "wrap": false
+            ]
+        ]
+
+        bodyItems.append([
+            "type": "Container",
+            "spacing": "Medium",
+            "items": [
+                [
+                    "type": "TextBlock",
+                    "text": "🔍 Formatted Multi-Line cURL (Terminal / Code Review)",
+                    "weight": "Bolder",
+                    "wrap": true
+                ],
+                [
+                    "type": "TextBlock",
+                    "text": "Formatted with line breaks (\\) and --compressed for direct Terminal shell execution.",
+                    "isSubtle": true,
+                    "spacing": "None",
+                    "wrap": true
+                ],
+                multiLineCodeBlock
+            ]
+        ])
+
+        // 4. 📦 REQUEST PAYLOAD PEEK (if present)
+        if let bodyData = transaction.request.rawBody ?? transaction.request.body, !bodyData.isEmpty,
+           let bodyStr = String(data: bodyData, encoding: .utf8) ?? String(data: bodyData, encoding: .ascii),
+           !bodyStr.isEmpty {
+            let formattedReqBody = formatJSONString(bodyStr) ?? String(bodyStr.prefix(2000))
+            let isJSON = transaction.request.isJSON || bodyStr.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("{")
+            bodyItems.append([
                 "type": "Container",
-                "style": "emphasis",
+                "spacing": "Medium",
                 "items": [
                     [
                         "type": "TextBlock",
-                        "text": "🚀 NetworkInspector • Trace Report",
+                        "text": "📦 Request Body (\(transaction.request.contentType ?? "Payload"))",
                         "weight": "Bolder",
-                        "size": "Large",
+                        "wrap": true
+                    ],
+                    [
+                        "type": "CodeBlock",
+                        "language": isJSON ? "json" : "PlainText",
+                        "codeSnippet": formattedReqBody,
+                        "fallback": [
+                            "type": "TextBlock",
+                            "text": "```\n\(formattedReqBody)\n```",
+                            "fontType": "Monospace",
+                            "wrap": false
+                        ]
+                    ]
+                ]
+            ])
+        }
+
+        // 5. 📥 SERVER RESPONSE PEEK (Especially critical for 4xx/5xx debugging)
+        if let res = transaction.response,
+           let resBody = res.bodyString, !resBody.isEmpty {
+            let isErrorRes = res.statusCode >= 400
+            let resTitle = isErrorRes
+                ? "🚨 Server Error Response (\(res.statusCode) \(res.statusDescription))"
+                : "📥 Server Response (\(res.statusCode) \(res.statusDescription))"
+            let formattedResBody = formatJSONString(resBody) ?? String(resBody.prefix(2000))
+            let isJSON = res.mimeType?.contains("json") == true
+                || resBody.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("{")
+                || resBody.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("[")
+
+            bodyItems.append([
+                "type": "Container",
+                "spacing": "Medium",
+                "items": [
+                    [
+                        "type": "TextBlock",
+                        "text": resTitle,
+                        "weight": "Bolder",
+                        "wrap": true
+                    ],
+                    [
+                        "type": "CodeBlock",
+                        "language": isJSON ? "json" : "PlainText",
+                        "codeSnippet": formattedResBody,
+                        "fallback": [
+                            "type": "TextBlock",
+                            "text": "```\n\(formattedResBody)\n```",
+                            "fontType": "Monospace",
+                            "wrap": false
+                        ]
+                    ]
+                ]
+            ])
+        } else if let err = transaction.error {
+            bodyItems.append([
+                "type": "Container",
+                "spacing": "Medium",
+                "items": [
+                    [
+                        "type": "TextBlock",
+                        "text": "❌ Transport Error",
+                        "weight": "Bolder",
                         "wrap": true
                     ],
                     [
                         "type": "TextBlock",
-                        "text": "Captured Network Diagnostic & cURL",
-                        "isSubtle": true,
-                        "spacing": "None",
+                        "text": err.localizedDescription,
                         "wrap": true
                     ]
                 ]
-            ],
-            // Request Meta FactSet
-            [
-                "type": "FactSet",
-                "spacing": "Medium",
-                "facts": facts
-            ]
-        ]
+            ])
+        }
 
-        // 👤 Authenticated User Details Section
+        // 6. 👤 AUTHENTICATED USER DETAILS SECTION (From live JWT)
         if let user = userDetails {
             var userFacts: [[String: String]] = []
             if let name = user.name, !name.isEmpty {
@@ -98,7 +277,6 @@ public enum TeamsNotificationBuilder {
                 userFacts.append(["title": "Issued At:", "value": iat.formatted(date: .abbreviated, time: .shortened)])
             }
 
-            // Fallback for custom fields if standard fields were empty
             if userFacts.isEmpty {
                 for (k, v) in user.rawPayload.prefix(5) where !["exp", "iat", "nbf", "jti"].contains(k) {
                     userFacts.append(["title": "\(k):", "value": v])
@@ -112,7 +290,7 @@ public enum TeamsNotificationBuilder {
                     "items": [
                         [
                             "type": "TextBlock",
-                            "text": "👤 Authenticated User Details",
+                            "text": "👤 Authenticated User & Token Claims",
                             "weight": "Bolder",
                             "wrap": true
                         ],
@@ -124,35 +302,16 @@ public enum TeamsNotificationBuilder {
                     ]
                 ])
             }
-        } else {
-            bodyItems.append([
-                "type": "Container",
-                "spacing": "Medium",
-                "items": [
-                    [
-                        "type": "TextBlock",
-                        "text": "👤 Authenticated User",
-                        "weight": "Bolder",
-                        "wrap": true
-                    ],
-                    [
-                        "type": "TextBlock",
-                        "text": "No authenticated user detected. Set via NetworkInspector.setLoggedInUser(...) or pass Bearer token in request headers.",
-                        "isSubtle": true,
-                        "wrap": true
-                    ]
-                ]
-            ])
         }
 
-        // 📱 Device Diagnostics Section
+        // 7. 📱 DEVICE & DIAGNOSTIC DETAILS
         bodyItems.append([
             "type": "Container",
             "spacing": "Medium",
             "items": [
                 [
                     "type": "TextBlock",
-                    "text": "📱 Device Diagnostics",
+                    "text": "📱 Client & Device Diagnostics",
                     "weight": "Bolder",
                     "wrap": true
                 ],
@@ -162,7 +321,7 @@ public enum TeamsNotificationBuilder {
                     "facts": [
                         ["title": "Device Model:", "value": device.deviceModel],
                         ["title": "OS Version:", "value": "\(device.systemName) \(device.systemVersion)"],
-                        ["title": "App Version:", "value": "\(device.appName) \(device.appVersion) (\(device.buildNumber))"],
+                        ["title": "App Version:", "value": "\(device.appName) v\(device.appVersion) (\(device.buildNumber))"],
                         ["title": "Timezone:", "value": device.timeZone],
                         ["title": "Locale:", "value": device.locale]
                     ]
@@ -170,7 +329,7 @@ public enum TeamsNotificationBuilder {
             ]
         ])
 
-        // Developer Note Section
+        // 8. 🧾 DEVELOPER / QA NOTE (if provided)
         if !note.isEmpty {
             bodyItems.append([
                 "type": "Container",
@@ -191,103 +350,14 @@ public enum TeamsNotificationBuilder {
             ])
         }
 
-        // cURL Section (With Live Token / Masked state)
-        let curlTitle = maskTokens ? "📡 cURL (Masked)" : "📡 cURL (Live Token - Ready for Postman)"
-        let curlSubtitle = maskTokens
-            ? "Sensitive tokens are masked for security."
-            : "⚡️ Contains active unmasked token. Click 'Copy code' on the 1-Line box below for 1-click Postman import."
-
-        let singleLineCodeBlock: [String: Any] = [
-            "type": "CodeBlock",
-            "language": "bash",
-            "codeSnippet": singleLineCurl,
-            "fallback": [
-                "type": "TextBlock",
-                "text": "```\n\(singleLineCurl)\n```",
-                "fontType": "Monospace",
-                "wrap": false
-            ]
-        ]
-
-        let multiLineCodeBlock: [String: Any] = [
-            "type": "CodeBlock",
-            "language": "bash",
-            "codeSnippet": multiLineCurl,
-            "fallback": [
-                "type": "TextBlock",
-                "text": "```\n\(multiLineCurl)\n```",
-                "fontType": "Monospace",
-                "wrap": false
-            ]
-        ]
-
+        // 9. FOOTER
         bodyItems.append([
             "type": "Container",
             "spacing": "Medium",
             "items": [
                 [
                     "type": "TextBlock",
-                    "text": curlTitle,
-                    "weight": "Bolder",
-                    "size": "Medium",
-                    "wrap": true
-                ],
-                [
-                    "type": "TextBlock",
-                    "text": curlSubtitle,
-                    "isSubtle": true,
-                    "spacing": "None",
-                    "wrap": true
-                ],
-                [
-                    "type": "TextBlock",
-                    "text": "📋 **1-Line Postman cURL** (Direct 1-Click Import — zero line wraps or URL splits):",
-                    "weight": "Bolder",
-                    "spacing": "Small",
-                    "wrap": true
-                ],
-                singleLineCodeBlock,
-                [
-                    "type": "TextBlock",
-                    "text": "🔍 **Multi-Line cURL** (Formatted for terminal / code review):",
-                    "spacing": "Medium",
-                    "wrap": true
-                ],
-                multiLineCodeBlock
-            ]
-        ])
-
-        // How to use in Postman
-        let testInstructions = maskTokens
-            ? "• Click **Copy code** on the **1-Line cURL** box above\n• Replace [REDACTED] tokens with active credentials\n• In Postman: **Import** → **Raw text** → **Paste** (or paste directly into request URL bar)"
-            : "• Click **Copy code** on the **1-Line Postman cURL** box above\n• In Postman: **Import** → **Raw text** → **Paste** (or paste directly into request URL bar)\n• All HTTP method, headers, query params, and live tokens will be automatically populated!"
-
-        bodyItems.append([
-            "type": "Container",
-            "spacing": "Medium",
-            "items": [
-                [
-                    "type": "TextBlock",
-                    "text": "💡 How to Test in Postman",
-                    "weight": "Bolder",
-                    "wrap": true
-                ],
-                [
-                    "type": "TextBlock",
-                    "text": testInstructions,
-                    "wrap": true
-                ]
-            ]
-        ])
-
-        // Footer
-        bodyItems.append([
-            "type": "Container",
-            "spacing": "Medium",
-            "items": [
-                [
-                    "type": "TextBlock",
-                    "text": "Generated via NetworkInspector SDK",
+                    "text": "Generated via NetworkInspector SDK • Postman & Terminal Ready",
                     "isSubtle": true,
                     "wrap": true
                 ]
@@ -302,5 +372,18 @@ public enum TeamsNotificationBuilder {
         ]
 
         return card
+    }
+
+    private static func formatJSONString(_ string: String, maxCount: Int = 1800) -> String? {
+        guard let data = string.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data, options: []),
+              let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
+              let prettyString = String(data: prettyData, encoding: .utf8) else {
+            return nil
+        }
+        if prettyString.count > maxCount {
+            return String(prettyString.prefix(maxCount)) + "\n... (truncated)"
+        }
+        return prettyString
     }
 }

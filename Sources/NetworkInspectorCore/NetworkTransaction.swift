@@ -94,71 +94,106 @@ public struct NetworkTransaction: Identifiable, Codable, Sendable {
         ByteCountFormatter.string(fromByteCount: Int64(request.bodySize), countStyle: .file)
     }
 
+    private static let headersToOmitFromCurl: Set<String> = [
+        "content-length",
+        "host",
+        "connection"
+    ]
+
     public func generateCurl(maskTokens: Bool = false, singleLine: Bool = false) -> String {
         let headersToUse = maskTokens ? request.headers : request.rawHeaders
         let urlString = request.url.absoluteString.trimmingCharacters(in: .whitespacesAndNewlines)
         let method = request.rawMethod.uppercased()
 
+        let isGet = method == "GET"
+        let isMultipart = request.isMultipart || (request.contentType?.lowercased().contains("multipart/form-data") == true)
+
         // Base command
         // For GET requests, Postman and POSIX curl prefer omitting explicit "-X GET" and using "curl --location '<url>'"
         // For other methods (POST, PUT, DELETE, PATCH, etc.), use "curl --location --request <METHOD> '<url>'"
         let methodClause: String
-        if method == "GET" {
+        if isGet {
             methodClause = "curl --location '\(urlString)'"
         } else {
             methodClause = "curl --location --request \(method) '\(urlString)'"
         }
 
-        if singleLine {
-            var curl = methodClause
+        var curl = methodClause
 
-            // Append headers
-            for (key, value) in headersToUse {
-                let headerValue = maskHeaderIfNeeded(key: key, value: value, maskTokens: maskTokens)
-                let escaped = headerValue.replacingOccurrences(of: "'", with: "'\\''")
-                curl += " --header '\(key): \(escaped)'"
+        // Append headers
+        for (key, value) in headersToUse {
+            let lower = key.lowercased()
+            // Skip pseudo-headers (e.g. :method, :path) and transport-level auto headers
+            if key.hasPrefix(":") || Self.headersToOmitFromCurl.contains(lower) {
+                continue
             }
+            // For multipart with --form, curl automatically creates Content-Type with dynamic boundary
+            if isMultipart && lower == "content-type" {
+                continue
+            }
+            let headerValue = maskHeaderIfNeeded(key: key, value: value, maskTokens: maskTokens)
+            let escaped = headerValue.replacingOccurrences(of: "'", with: "'\\''")
+            if singleLine {
+                curl += " --header '\(key): \(escaped)'"
+            } else {
+                curl += " \\\n  --header '\(key): \(escaped)'"
+            }
+        }
 
-            // Append body
+        // Append body or multipart forms
+        if isMultipart, let parts = multipartParts, !parts.isEmpty {
+            for part in parts {
+                if part.isFile {
+                    let fn = (part.filename ?? "file.bin").replacingOccurrences(of: "'", with: "'\\''")
+                    if singleLine {
+                        curl += " --form '\(part.name)=@\(fn)'"
+                    } else {
+                        curl += " \\\n  --form '\(part.name)=@\(fn)'"
+                    }
+                } else {
+                    let val = (part.previewContent ?? "").replacingOccurrences(of: "'", with: "'\\''")
+                    if singleLine {
+                        curl += " --form '\(part.name)=\(val)'"
+                    } else {
+                        curl += " \\\n  --form '\(part.name)=\(val)'"
+                    }
+                }
+            }
+        } else {
             let bodyData = maskTokens ? request.body : (request.rawBody ?? request.body)
             if let bodyData = bodyData, !bodyData.isEmpty {
-                // If JSON, compact it to ensure no newlines in single-line command
+                // If JSON, compact it to ensure zero newlines in single-line command
                 if let jsonObject = try? JSONSerialization.jsonObject(with: bodyData, options: []),
                    let compactData = try? JSONSerialization.data(withJSONObject: jsonObject, options: []),
                    let compactString = String(data: compactData, encoding: .utf8) {
                     let escaped = compactString.replacingOccurrences(of: "'", with: "'\\''")
-                    curl += " --data-raw '\(escaped)'"
+                    if singleLine {
+                        curl += " --data-raw '\(escaped)'"
+                    } else {
+                        curl += " \\\n  --data-raw '\(escaped)'"
+                    }
                 } else if let bodyString = String(data: bodyData, encoding: .utf8) ?? String(data: bodyData, encoding: .ascii) {
-                    let flattened = bodyString
-                        .replacingOccurrences(of: "\r\n", with: "\\n")
-                        .replacingOccurrences(of: "\n", with: "\\n")
-                        .replacingOccurrences(of: "\r", with: "\\r")
-                        .replacingOccurrences(of: "'", with: "'\\''")
-                    curl += " --data-raw '\(flattened)'"
+                    if singleLine {
+                        let flattened = bodyString
+                            .replacingOccurrences(of: "\r\n", with: "\\n")
+                            .replacingOccurrences(of: "\n", with: "\\n")
+                            .replacingOccurrences(of: "\r", with: "\\r")
+                            .replacingOccurrences(of: "'", with: "'\\''")
+                        curl += " --data-raw '\(flattened)'"
+                    } else {
+                        let escaped = bodyString.replacingOccurrences(of: "'", with: "'\\''")
+                        curl += " \\\n  --data-raw '\(escaped)'"
+                    }
                 }
             }
-
-            return curl
-        } else {
-            var curl = methodClause
-
-            // Append headers with line continuations
-            for (key, value) in headersToUse {
-                let headerValue = maskHeaderIfNeeded(key: key, value: value, maskTokens: maskTokens)
-                let escaped = headerValue.replacingOccurrences(of: "'", with: "'\\''")
-                curl += " \\\n  --header '\(key): \(escaped)'"
-            }
-
-            // Append body
-            let bodyData = maskTokens ? request.body : (request.rawBody ?? request.body)
-            if let bodyData = bodyData, !bodyData.isEmpty,
-               let bodyString = String(data: bodyData, encoding: .utf8) ?? String(data: bodyData, encoding: .ascii) {
-                let escapedBody = bodyString.replacingOccurrences(of: "'", with: "'\\''")
-                curl += " \\\n  --data-raw '\(escapedBody)'"
-            }
-
-            return curl
         }
+
+        // Add --compressed to multi-line for clean terminal decompression
+        if !singleLine {
+            curl += " \\\n  --compressed"
+        }
+
+        return curl
     }
 
     private func maskHeaderIfNeeded(key: String, value: String, maskTokens: Bool) -> String {

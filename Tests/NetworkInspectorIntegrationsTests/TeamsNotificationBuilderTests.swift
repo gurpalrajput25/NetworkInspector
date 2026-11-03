@@ -71,4 +71,43 @@ final class TeamsNotificationBuilderTests: XCTestCase {
         XCTAssertTrue(foundSingleLineCodeBlock, "Adaptive Card must include 1-line CodeBlock for 1-click Postman import")
         XCTAssertTrue(foundMultiLineCodeBlock, "Adaptive Card must include multi-line CodeBlock for terminal inspection")
     }
+
+    func testAdaptiveCardWithRequestBodyAndServerResponsePeek() {
+        let url = URL(string: "https://api.example.com/v1/checkout")!
+        let reqBody = "{\"cart_id\":\"12345\",\"amount\":99.9}".data(using: .utf8)
+        let req = NetworkRequest(url: url, method: "POST", headers: ["Content-Type": "application/json"], body: reqBody, rawBody: reqBody)
+
+        let resBody = "{\"status\":500,\"error\":\"PaymentGatewayTimeout\",\"message\":\"Stripe did not respond\"}".data(using: .utf8)
+        let res = NetworkResponse(statusCode: 500, headers: ["Content-Type": "application/json"], body: resBody)
+
+        let tx = NetworkTransaction(request: req, response: res, status: .failed)
+
+        let card = TeamsNotificationBuilder.buildAdaptiveCard(transaction: tx, environmentName: "Production")
+        guard let body = card["body"] as? [[String: Any]] else {
+            XCTFail("Missing body")
+            return
+        }
+
+        var foundReqPayloadPeek = false
+        var foundServerErrorPeek = false
+
+        for item in body {
+            if let containerItems = item["items"] as? [[String: Any]] {
+                for sub in containerItems {
+                    if let text = sub["text"] as? String {
+                        if text.contains("Request Body") {
+                            foundReqPayloadPeek = true
+                        }
+                        if text.contains("Server Error Response (500") {
+                            foundServerErrorPeek = true
+                        }
+                    }
+                }
+            }
+        }
+
+        XCTAssertTrue(foundReqPayloadPeek, "Adaptive card must include request payload peek for backend inspection")
+        XCTAssertTrue(foundServerErrorPeek, "Adaptive card must include server error response peek for fast debugging")
+    }
 }
+

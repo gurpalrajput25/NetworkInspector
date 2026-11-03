@@ -56,6 +56,22 @@ final class NetworkRequestTests: XCTestCase {
         XCTAssertTrue(getCurl.hasPrefix("curl --location 'https://api.example.com/events?date=2026-11-03&type=1'"))
         XCTAssertFalse(getCurl.contains("-X GET"), "GET requests should omit -X GET for Postman importer compatibility")
         XCTAssertTrue(getCurl.contains("--header 'Authorization: Bearer token123'"))
+
+        // Sanitization test: Content-Length, Host, and Connection omitted
+        let sanitizedHeaders = [
+            "Authorization": "Bearer mytoken",
+            "Content-Length": "123",
+            "Host": "api.example.com",
+            "Connection": "keep-alive",
+            "Content-Type": "application/json"
+        ]
+        let sanitizeReq = NetworkRequest(url: url, method: "POST", headers: sanitizedHeaders, body: "{\"test\":1}".data(using: .utf8))
+        let sanitizeTx = NetworkTransaction(request: sanitizeReq)
+        let sanitizeCurl = sanitizeTx.generateCurl(maskTokens: false, singleLine: true)
+        XCTAssertFalse(sanitizeCurl.contains("--header 'Content-Length:"), "Content-Length should not be hardcoded in cURL so Postman computes it dynamically")
+        XCTAssertFalse(sanitizeCurl.contains("--header 'Host:"), "Host header should not be hardcoded in cURL")
+        XCTAssertFalse(sanitizeCurl.contains("--header 'Connection:"), "Connection header should not be in cURL")
+        XCTAssertTrue(sanitizeCurl.contains("--header 'Content-Type: application/json'"))
     }
 }
 
