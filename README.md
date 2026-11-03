@@ -18,7 +18,8 @@ It supports URLSession and Alamofire integrations, with tools for request inspec
 - **Device Diagnostics:** Include device model, iOS version, app version, build number, locale, and timezone in diagnostic reports.
 - **Session Management:** Group requests into debugging sessions and export session data.
 - **Multiple Export Formats:** Export logs as JSON, HAR 1.2, CSV, cURL, and diagnostic reports.
-- **Microsoft Teams Integration:** Share sanitized API failures and diagnostic reports with Teams.
+- **Microsoft Teams Adaptive Cards (Schema v1.4):** Dispatch rich diagnostic cards with high-contrast monospaced cURL code blocks, device diagnostics, and authenticated user details without hyperlink injection or line-wrap truncation.
+- **1-Click Postman Cloud Automation:** Automatically push intercepted HTTP requests to a shared Postman Cloud collection and embed an interactive **`🚀 Open in Postman`** deep-link button directly in Teams notifications.
 - **Privacy Controls:** Redact sensitive headers and request/response fields before storing or exporting logs.
 - **Quick Activation:** Open the inspector using shake gestures or programmatic presentation.
 - **Native UI:** SwiftUI interface with Dark Mode, Light Mode, and Dynamic Type support.
@@ -313,26 +314,90 @@ Available information includes:
 - Upload duration.
 - Upload progress, when observable.
 
-## Microsoft Teams Integration
+## Microsoft Teams Integration & 1-Click Postman Automation
 
-NetworkInspector supports sharing diagnostic information with Microsoft Teams through a configured integration.
+NetworkInspector features an enterprise-grade integration with **Microsoft Teams (Adaptive Card Schema v1.4)** and the **Postman Cloud REST API**.
 
-Supported reporting includes:
+When an issue occurs or an engineer shares a trace:
+1. Intercepted HTTP requests are automatically pushed to a shared QA collection in **Postman Cloud**.
+2. An Adaptive Card is dispatched to the configured Teams channel featuring an interactive **`🚀 Open in Postman`** button.
+3. Backend and QA engineers can either click the button to immediately focus Postman Desktop with all parameters pre-loaded, or copy the cleanly formatted, monospaced cURL code block.
 
-- API failures.
-- HTTP 4XX and 5XX responses.
-- Slow requests.
-- Request details.
-- Sanitized cURL commands.
-- Device diagnostics.
-- Developer and QA notes.
-- Session summaries.
+```
+┌────────────────────────────────┐
+│   iOS Client / App Runtime     │
+│ (NetworkInspector SDK Layer)   │
+└───────────────┬────────────────┘
+                │
+                ├──────────────────────────────────────────────┐
+                │                                              │
+                ▼ (Step 1)                                     ▼ (Step 2)
+  ┌───────────────────────────┐                  ┌───────────────────────────┐
+  │  Postman Cloud REST API   │                  │  Teams Incoming Webhook   │
+  │  POST /collections/{id}   │                  │  Adaptive Card Payload    │
+  └─────────────┬─────────────┘                  └─────────────┬─────────────┘
+                │                                              │
+                ▼                                              │
+  ┌───────────────────────────┐                                │
+  │ Postman Cloud Request UID │ ──(Injected into Action Link)──┘
+  └───────────────────────────┘
+                                                               │
+                                                               ▼ (Step 3)
+                                                 ┌───────────────────────────┐
+                                                 │   MS Teams Channel Card   │
+                                                 │  - Code Block with Copy   │
+                                                 │  - [Open in Postman] Btn  │
+                                                 │  - Authenticated User     │
+                                                 └─────────────┬─────────────┘
+                                                               │
+                                                               ▼ (Step 4: User clicks)
+                                                 ┌───────────────────────────┐
+                                                 │   Postman Desktop App     │
+                                                 │ Deep links to request UID │
+                                                 └───────────────────────────┘
+```
 
-Before sharing, sensitive information should be redacted.
+### Key Capabilities
 
-**Security:** Do not embed shared webhook secrets or permanent Power Automate webhook URLs in the distributed SDK. Use an appropriately protected integration, delegated authentication, or an organization-managed relay.
+- **Zero Hyperlink Injection:** Long URLs inside Teams are enclosed in a monospaced bleed container (`Container` style: `emphasis` with ```` ```bash ... ``` ````). This prevents Teams from injecting clickable blue hyperlinks or inserting visual line-break corruption when copying.
+- **POSIX-Compliant Line Continuations (`\`):** Headers are joined with ` \\\n` and indented with 2 spaces (`  -H '...'`). They execute flawlessly in Terminal/bash/zsh and import directly into Postman.
+- **HTTP/2 Clean-up:** Automatically filters out protocol pseudo-headers (`:method`, `:path`, `:authority`, `:scheme`) and transport headers (`connection`, `content-length`).
+- **Live Authenticated User Details:** Automatically extracts and displays the active session's User ID, Name, Email, Role, Organizer ID (from JWT claims or URL query parameters), and live Token Status.
+- **1-Click Native Action:** Native `Action.OpenUrl` titled **`🚀 Open in Postman`** launches the Postman desktop client directly to the newly pushed request.
 
-Teams integration is optional and does not affect core network capture.
+### Setup & Configuration
+
+Configure Teams and Postman Cloud programmatically during app startup:
+
+```swift
+// 1. Configure Microsoft Teams Incoming Webhook:
+NetworkInspector.configureTeams(
+    webhookURL: URL(string: "https://your-org.webhook.office.com/webhookb2/...")!,
+    environmentName: "QA"
+)
+
+// 2. Configure 1-Click Postman Cloud Automation:
+NetworkInspector.configurePostman(
+    apiKey: "PMAK-65a...",                             // Postman API key with collection write access
+    collectionUid: "12345678-abcd-ef01-2345-6789abcdef", // Target Collection UID (<workspace_id>-<collection_uuid>)
+    workspaceId: "87654321-4321-dcba-ba98-76543210fedc"  // Target Workspace ID from go.postman.co/workspace/<ID>/...
+)
+```
+
+You can also provide these credentials via `NetworkInspectorConfiguration`:
+
+```swift
+let config = NetworkInspectorConfiguration(
+    isEnabled: true,
+    teamsWebhookURL: URL(string: "https://..."),
+    postmanAPIKey: "PMAK-...",
+    postmanCollectionUID: "12345678-...",
+    postmanWorkspaceID: "87654321-..."
+)
+NetworkInspector.start(configuration: config)
+```
+
+Or configure them on the fly directly inside the in-app **Share to Teams** dialog. Credentials are securely persisted in local device storage (`@AppStorage`).
 
 ## Privacy and Security
 
@@ -406,14 +471,24 @@ NetworkInspector.clearCurrentUser()
 
 NetworkInspector allows you to export and share requests with **unmasked live tokens** so that backend and QA engineers can reproduce issues in Postman in seconds:
 
-1. **In-App Request Detail (cURL Tab)**:
+1. **1-Click Postman Cloud Automation**:
+   - In Teams cards, click the **`🚀 Open in Postman`** button. Postman Desktop will immediately focus and open the exact request definition with all query parameters, live headers, and request bodies ready to execute.
+2. **In-App Request Detail (cURL Tab)**:
    - Toggle between **🛡 Masked** (for safe screenshots) and **⚡️ Live Token (Postman)**.
    - Tap **Copy Live cURL (for Postman)**.
-   - In Postman: Click **Import** → **Raw text** → Paste the cURL command and click **Import**. Postman immediately configures the URL, HTTP method, headers with your active Bearer token, and request body.
-2. **Microsoft Teams Diagnostic Cards**:
-   - In the **Share to Teams** dialog, toggle **Live Token (Direct Postman Import)** on or off.
-   - When enabled, the Adaptive Card sent to your Teams channel contains the unmasked cURL command and full authenticated user profile for 1-click Postman execution.
-3. **Export Center (HAR & cURL)**:
+   - In Postman: Paste directly into the **URL address bar** (`Cmd+V` / `Ctrl+V`) or click **Import** → **Raw text** → Paste. Postman immediately parses the method, URL, query params, Bearer token, and headers.
+3. **Microsoft Teams Diagnostic Cards**:
+   - In the **Share to Teams** dialog, toggle **Live Token (Direct Postman Import)** on.
+   - The Adaptive Card embeds the unmasked cURL inside a shaded monospace code container with ```` ```bash\n... \n``` ```` and line continuations (`\`), completely immune to hyperlinking and line-wrap bugs.
+4. **Programmatic `CurlFormatter`**:
+   - Format any Foundation `URLRequest` or `NetworkTransaction` programmatically:
+     ```swift
+     let curl = CurlFormatter.format(request: urlRequest)
+     // Returns: curl -X GET 'https://...' \
+     //            -H 'Authorization: Bearer ...' \
+     //            -H 'Time-Zone: Asia/Kolkata'
+     ```
+5. **Export Center (HAR & cURL)**:
    - Toggle **Include Live Tokens (for Postman)** when exporting `.har` or `.sh` files to test in Charles, Postman, or Insomnia.
 
 ## Export Formats

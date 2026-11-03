@@ -89,3 +89,4 @@ final class PostmanCloudServiceTests: XCTestCase {
         waitForExpectations(timeout: 2.0)
     }
 }
+

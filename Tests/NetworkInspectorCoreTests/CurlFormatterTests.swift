@@ -42,3 +42,4 @@ final class CurlFormatterTests: XCTestCase {
         XCTAssertTrue(formatted.contains("--data '{}'"))
     }
 }
+
