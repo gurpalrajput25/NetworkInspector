@@ -1,6 +1,7 @@
 import SwiftUI
 import NetworkInspectorCore
 import NetworkInspectorIntegrations
+import NetworkInspectorAnalytics
 
 public struct RequestDetailView: View {
     public let transaction: NetworkTransaction
@@ -22,11 +23,13 @@ public struct RequestDetailView: View {
             // Segmented Tab Picker
             Picker("Detail Section", selection: $selectedTab) {
                 Text("Overview").tag(0)
-                Text("Request").tag(1)
-                Text("Response").tag(2)
-                Text("cURL").tag(3)
+                Text("AI Suggestions").tag(1)
+                Text("Analytics").tag(2)
+                Text("Request").tag(3)
+                Text("Response").tag(4)
+                Text("cURL").tag(5)
                 if transaction.request.isMultipart || (transaction.multipartParts?.isEmpty == false) {
-                    Text("Multipart").tag(4)
+                    Text("Multipart").tag(6)
                 }
             }
             .pickerStyle(.segmented)
@@ -40,12 +43,18 @@ public struct RequestDetailView: View {
                     case 0:
                         overviewSection
                     case 1:
-                        requestSection
+                        RequestAISuggestionsView(transaction: transaction) {
+                            showingTeamsShare = true
+                        }
                     case 2:
-                        responseSection
+                        RequestAnalyticsDetailView(transaction: transaction)
                     case 3:
-                        curlSection
+                        requestSection
                     case 4:
+                        responseSection
+                    case 5:
+                        curlSection
+                    case 6:
                         multipartSection
                     default:
                         EmptyView()
@@ -213,19 +222,19 @@ public struct RequestDetailView: View {
 
         return VStack(alignment: .leading, spacing: 16) {
             Picker("cURL Mode", selection: $isLiveCurlMode) {
-                Text("⚡️ Live Token (Postman)").tag(true)
+                Text("⚡️ Live Token").tag(true)
                 Text("🛡 Masked").tag(false)
             }
             .pickerStyle(.segmented)
 
             if isLiveCurlMode {
-                // Postman 1-Line (Primary)
+                // 1-Line Executable cURL
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Postman 1-Line cURL")
+                            Text("1-Line cURL")
                                 .font(.headline)
-                            Text("Direct 1-click import into Postman with live unmasked token.")
+                            Text("Direct terminal or client execution with live unmasked token.")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
@@ -235,7 +244,7 @@ public struct RequestDetailView: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "bolt.fill")
-                                Text("Copy 1-Line Postman")
+                                Text("Copy 1-Line cURL")
                             }
                             .font(.caption.bold())
                             .padding(.horizontal, 10)
@@ -283,7 +292,7 @@ public struct RequestDetailView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "info.circle.fill")
                         .foregroundColor(.blue)
-                    Text("In Postman: Click Import → Raw text → Paste (or paste directly in request URL bar).")
+                    Text("Paste directly into your Terminal, HTTP client, or debugging script.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

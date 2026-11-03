@@ -1,16 +1,18 @@
 import Foundation
 import NetworkInspectorCore
 import NetworkInspectorPrivacy
+import NetworkInspectorAnalytics
 
 public enum TeamsNotificationBuilder {
 
     public static func buildAdaptiveCard(
         transaction: NetworkTransaction,
-        postmanDeepLink: String? = nil,
         developerNote: String? = nil,
         environmentName: String = "Development",
         customUser: JWTUserDetails? = nil,
-        maskTokens: Bool = false
+        maskTokens: Bool = false,
+        aiSuggestionReport: APISuggestionReport? = nil,
+        requestAnalytics: RequestAnalytics? = nil
     ) -> [String: Any] {
         let note = developerNote?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let multiLineCurl = String(transaction.generateCurl(maskTokens: maskTokens, singleLine: false).prefix(4000))
@@ -44,7 +46,7 @@ public enum TeamsNotificationBuilder {
 
         var bodyItems: [[String: Any]] = []
 
-        // 1. 🚀 HERO HEADER CONTAINER (Immediate visual feedback)
+        // 1. HERO HEADER CONTAINER
         bodyItems.append([
             "type": "Container",
             "style": "emphasis",
@@ -74,7 +76,150 @@ public enum TeamsNotificationBuilder {
             ]
         ])
 
-        // 2. 📋 POSTMAN 1-CLICK cURL (Primary Action Box — zero editing needed)
+        // 2. 🤖 AI SUGGESTIONS & API STANDARDS AUDIT (if enabled)
+        if let ai = aiSuggestionReport {
+            var aiItems: [[String: Any]] = [
+                [
+                    "type": "TextBlock",
+                    "text": "🤖 AI Suggestions & API Standards Audit",
+                    "weight": "Bolder",
+                    "size": "Medium",
+                    "wrap": true
+                ],
+                [
+                    "type": "FactSet",
+                    "spacing": "Small",
+                    "facts": [
+                        ["title": "Standards Score:", "value": "\(ai.overallScore) / 100 (Grade \(ai.grade))"],
+                        ["title": "Status:", "value": ai.statusSummary]
+                    ]
+                ],
+                [
+                    "type": "TextBlock",
+                    "text": ai.summary,
+                    "wrap": true,
+                    "spacing": "Small"
+                ]
+            ]
+
+            if !ai.spottedMistakes.isEmpty {
+                aiItems.append([
+                    "type": "TextBlock",
+                    "text": "🔍 Spotted Mistakes & Standards Violations (\(ai.spottedMistakes.count)):",
+                    "weight": "Bolder",
+                    "spacing": "Medium"
+                ])
+
+                for mistake in ai.spottedMistakes.prefix(4) {
+                    let text = "**\(mistake.severity.emoji) \(mistake.title)**\n• *Why:* \(mistake.explanation)\n• *Suggested Fix:* `\(mistake.suggestedFix)`"
+                    aiItems.append([
+                        "type": "TextBlock",
+                        "text": text,
+                        "wrap": true,
+                        "spacing": "Small"
+                    ])
+                }
+            }
+
+            // Correct Request Syntax Box
+            aiItems.append(contentsOf: [
+                [
+                    "type": "TextBlock",
+                    "text": "✨ Corrected API Request Syntax",
+                    "weight": "Bolder",
+                    "spacing": "Medium"
+                ],
+                [
+                    "type": "CodeBlock",
+                    "language": "bash",
+                    "codeSnippet": ai.suggestedRequest.curl,
+                    "fallback": [
+                        "type": "TextBlock",
+                        "text": "```\n\(ai.suggestedRequest.curl)\n```",
+                        "fontType": "Monospace",
+                        "wrap": false
+                    ]
+                ]
+            ])
+
+            // Recommended Response Schema
+            if let resBody = ai.suggestedResponse.body, !resBody.isEmpty {
+                aiItems.append(contentsOf: [
+                    [
+                        "type": "TextBlock",
+                        "text": "✨ Recommended Response Schema (\(ai.suggestedResponse.schemaDescription))",
+                        "weight": "Bolder",
+                        "spacing": "Small"
+                    ],
+                    [
+                        "type": "CodeBlock",
+                        "language": "json",
+                        "codeSnippet": String(resBody.prefix(800)),
+                        "fallback": [
+                            "type": "TextBlock",
+                            "text": "```\n\(String(resBody.prefix(800)))\n```",
+                            "fontType": "Monospace",
+                            "wrap": false
+                        ]
+                    ]
+                ])
+            }
+
+            bodyItems.append([
+                "type": "Container",
+                "style": "emphasis",
+                "spacing": "Medium",
+                "items": aiItems
+            ])
+        }
+
+        // 3. 📊 REQUEST PERFORMANCE & TIMINGS ANALYTICS (if enabled)
+        if let analytics = requestAnalytics {
+            var timingFacts: [[String: String]] = [
+                ["title": "Total Duration:", "value": String(format: "%.1f ms", analytics.totalDuration * 1000)],
+                ["title": "Performance Tier:", "value": analytics.performanceTier.rawValue]
+            ]
+            if let wait = analytics.waitDuration {
+                timingFacts.append(["title": "Server Wait (TTFB):", "value": String(format: "%.1f ms", wait * 1000)])
+            }
+            if let dns = analytics.dnsDuration {
+                timingFacts.append(["title": "DNS Lookup:", "value": String(format: "%.1f ms", dns * 1000)])
+            }
+            if let conn = analytics.connectDuration {
+                timingFacts.append(["title": "TCP / TLS Connect:", "value": String(format: "%.1f ms", conn * 1000)])
+            }
+
+            var dataFacts: [[String: String]] = [
+                ["title": "Total Transferred:", "value": ByteCountFormatter.string(fromByteCount: analytics.totalDataTransferred, countStyle: .file)],
+                ["title": "Data Sent:", "value": ByteCountFormatter.string(fromByteCount: Int64(analytics.totalBytesSent), countStyle: .file)],
+                ["title": "Data Received:", "value": ByteCountFormatter.string(fromByteCount: analytics.totalBytesReceived, countStyle: .file)],
+                ["title": "Protocol:", "value": analytics.networkProtocol],
+                ["title": "Connection:", "value": analytics.isReusedConnection ? "Reused (Keep-Alive)" : "New Handshake"]
+            ]
+            if let throughput = analytics.formattedThroughput {
+                dataFacts.append(["title": "Throughput:", "value": throughput])
+            }
+
+            bodyItems.append([
+                "type": "Container",
+                "spacing": "Medium",
+                "items": [
+                    [
+                        "type": "TextBlock",
+                        "text": "📊 Request Analytics & Waterfall Timings",
+                        "weight": "Bolder",
+                        "size": "Medium"
+                    ],
+                    [
+                        "type": "FactSet",
+                        "spacing": "Small",
+                        "facts": timingFacts + dataFacts
+                    ]
+                ]
+            ])
+        }
+
+        // 4. 📋 1-CLICK EXECUTABLE cURL
         let singleLineCodeBlock: [String: Any] = [
             "type": "CodeBlock",
             "language": "bash",
@@ -87,16 +232,16 @@ public enum TeamsNotificationBuilder {
             ]
         ]
 
-        let postmanTitle = maskTokens ? "📋 Postman cURL (Masked)" : "📋 Postman cURL (1-Click Direct Import • Zero Editing)"
-        let postmanSubtitle = maskTokens
-            ? "⚠️ Tokens are masked for privacy. Replace [REDACTED] in Postman."
-            : "⚡️ Active live token included. Ready for direct Postman execution with 0 manual adjustments."
+        let curlCardTitle = maskTokens ? "📋 Executable cURL (Masked)" : "📋 Executable cURL (1-Line Quick Copy • Direct Execution)"
+        let curlCardSubtitle = maskTokens
+            ? "⚠️ Tokens are masked for privacy. Replace [REDACTED] before executing."
+            : "⚡️ Active live token included. Ready for direct execution in Terminal or API clients."
 
-        let postmanQuickGuide = """
-        👉 **Instant Postman Import (2 Seconds):**
+        let executionGuide = """
+        👉 **Instant Execution:**
         1. Click **'Copy code'** on the top-right of the box above.
-        2. In Postman: Paste directly into the **URL address bar** (`Cmd+V` / `Ctrl+V`) or click **Import → Raw text**.
-        3. Method, URL, query params, headers, and authorization are 100% pre-configured. Just hit **Send**!
+        2. Paste directly into your **Terminal shell** or any API client (`Cmd+V` / `Ctrl+V`).
+        3. Method, URL, query params, headers, and authorization are 100% pre-configured.
         """
 
         bodyItems.append([
@@ -105,14 +250,14 @@ public enum TeamsNotificationBuilder {
             "items": [
                 [
                     "type": "TextBlock",
-                    "text": postmanTitle,
+                    "text": curlCardTitle,
                     "weight": "Bolder",
                     "size": "Medium",
                     "wrap": true
                 ],
                 [
                     "type": "TextBlock",
-                    "text": postmanSubtitle,
+                    "text": curlCardSubtitle,
                     "isSubtle": true,
                     "spacing": "None",
                     "wrap": true
@@ -120,7 +265,7 @@ public enum TeamsNotificationBuilder {
                 singleLineCodeBlock,
                 [
                     "type": "TextBlock",
-                    "text": postmanQuickGuide,
+                    "text": executionGuide,
                     "isSubtle": true,
                     "spacing": "Small",
                     "wrap": true
@@ -128,7 +273,7 @@ public enum TeamsNotificationBuilder {
             ]
         ])
 
-        // 3. 🔍 FORMATTED MULTI-LINE cURL (For Terminal execution & code review)
+        // 5. 🔍 FORMATTED MULTI-LINE cURL
         let multiLineCodeBlock: [String: Any] = [
             "type": "CodeBlock",
             "language": "bash",
@@ -153,7 +298,7 @@ public enum TeamsNotificationBuilder {
                 ],
                 [
                     "type": "TextBlock",
-                    "text": "Formatted with line breaks (\\) and --compressed for direct Terminal shell execution.",
+                    "text": "Formatted with line breaks (\\) for easy inspection and debugging.",
                     "isSubtle": true,
                     "spacing": "None",
                     "wrap": true
@@ -162,7 +307,7 @@ public enum TeamsNotificationBuilder {
             ]
         ])
 
-        // 4. 📦 REQUEST PAYLOAD PEEK (if present)
+        // 6. 📦 REQUEST PAYLOAD PEEK
         if let bodyData = transaction.request.rawBody ?? transaction.request.body, !bodyData.isEmpty,
            let bodyStr = String(data: bodyData, encoding: .utf8) ?? String(data: bodyData, encoding: .ascii),
            !bodyStr.isEmpty {
@@ -193,7 +338,7 @@ public enum TeamsNotificationBuilder {
             ])
         }
 
-        // 5. 📥 SERVER RESPONSE PEEK (Especially critical for 4xx/5xx debugging)
+        // 7. 📥 SERVER RESPONSE PEEK
         if let res = transaction.response,
            let resBody = res.bodyString, !resBody.isEmpty {
             let isErrorRes = res.statusCode >= 400
@@ -248,7 +393,7 @@ public enum TeamsNotificationBuilder {
             ])
         }
 
-        // 6. 👤 AUTHENTICATED USER DETAILS SECTION (From live JWT)
+        // 8. 👤 AUTHENTICATED USER DETAILS
         if let user = userDetails {
             var userFacts: [[String: String]] = []
             if let name = user.name, !name.isEmpty {
@@ -305,7 +450,7 @@ public enum TeamsNotificationBuilder {
             }
         }
 
-        // 7. 📱 DEVICE & DIAGNOSTIC DETAILS
+        // 9. 📱 DEVICE & DIAGNOSTIC DETAILS
         bodyItems.append([
             "type": "Container",
             "spacing": "Medium",
@@ -330,7 +475,7 @@ public enum TeamsNotificationBuilder {
             ]
         ])
 
-        // 8. 🧾 DEVELOPER / QA NOTE (if provided)
+        // 10. DEVELOPER / QA NOTE
         if !note.isEmpty {
             bodyItems.append([
                 "type": "Container",
@@ -351,56 +496,49 @@ public enum TeamsNotificationBuilder {
             ])
         }
 
-        // 9. FOOTER
+        // 11. FOOTER
         bodyItems.append([
             "type": "Container",
             "spacing": "Medium",
             "items": [
                 [
                     "type": "TextBlock",
-                    "text": "Generated via NetworkInspector SDK • Postman & Terminal Ready",
+                    "text": "Generated via NetworkInspector SDK • AI Standards & Diagnostics",
                     "isSubtle": true,
                     "wrap": true
                 ]
             ]
         ])
 
-        var card: [String: Any] = [
+        return [
             "type": "AdaptiveCard",
             "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
             "version": "1.5",
             "body": bodyItems
         ]
-
-        if let link = postmanDeepLink, !link.isEmpty {
-            card["actions"] = [
-                [
-                    "type": "Action.OpenUrl",
-                    "title": "🚀 Open in Postman",
-                    "url": link
-                ]
-            ]
-        }
-
-        return card
     }
 
     /// Wraps the Adaptive Card in a Teams Webhook message envelope.
     public static func buildMessagePayload(
         transaction: NetworkTransaction,
-        postmanDeepLink: String? = nil,
         developerNote: String? = nil,
         environmentName: String = "Development",
         customUser: JWTUserDetails? = nil,
-        maskTokens: Bool = false
+        maskTokens: Bool = false,
+        includeAISuggestions: Bool = true,
+        includeAnalytics: Bool = true
     ) -> [String: Any] {
+        let aiReport = includeAISuggestions ? APISuggestionEngine.analyze(transaction: transaction) : nil
+        let analytics = includeAnalytics ? RequestAnalyticsBuilder.build(for: transaction) : nil
+
         let card = buildAdaptiveCard(
             transaction: transaction,
-            postmanDeepLink: postmanDeepLink,
             developerNote: developerNote,
             environmentName: environmentName,
             customUser: customUser,
-            maskTokens: maskTokens
+            maskTokens: maskTokens,
+            aiSuggestionReport: aiReport,
+            requestAnalytics: analytics
         )
         return [
             "type": "message",
@@ -411,6 +549,46 @@ public enum TeamsNotificationBuilder {
                 ]
             ]
         ]
+    }
+
+    /// Backward compatibility overload ignoring postmanDeepLink
+    public static func buildAdaptiveCard(
+        transaction: NetworkTransaction,
+        postmanDeepLink: String?,
+        developerNote: String? = nil,
+        environmentName: String = "Development",
+        customUser: JWTUserDetails? = nil,
+        maskTokens: Bool = false
+    ) -> [String: Any] {
+        buildAdaptiveCard(
+            transaction: transaction,
+            developerNote: developerNote,
+            environmentName: environmentName,
+            customUser: customUser,
+            maskTokens: maskTokens,
+            aiSuggestionReport: nil,
+            requestAnalytics: nil
+        )
+    }
+
+    /// Backward compatibility overload ignoring postmanDeepLink
+    public static func buildMessagePayload(
+        transaction: NetworkTransaction,
+        postmanDeepLink: String?,
+        developerNote: String? = nil,
+        environmentName: String = "Development",
+        customUser: JWTUserDetails? = nil,
+        maskTokens: Bool = false
+    ) -> [String: Any] {
+        buildMessagePayload(
+            transaction: transaction,
+            developerNote: developerNote,
+            environmentName: environmentName,
+            customUser: customUser,
+            maskTokens: maskTokens,
+            includeAISuggestions: true,
+            includeAnalytics: true
+        )
     }
 
     private static func formatJSONString(_ string: String, maxCount: Int = 1800) -> String? {

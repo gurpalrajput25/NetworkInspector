@@ -1,25 +1,24 @@
 import XCTest
 import NetworkInspectorCore
+import NetworkInspectorAnalytics
 @testable import NetworkInspectorIntegrations
 
 final class TeamsAdaptiveCardBuilderTests: XCTestCase {
 
-    func testAdaptiveCardBuilderPayloadContract() {
+    func testAdaptiveCardRemovesOpenInPostmanAndIncludesDiagnostics() {
         let curl = "curl -X GET 'https://qa-events.venivibe.com/events' \\\n  -H 'Authorization: Bearer token'"
         let diagnostics = TeamsAdaptiveCardBuilder.DeviceDiagnostics(
             model: "arm64",
-            osVersion: "iOS 27.0",
-            appVersion: "VeniVibe Vendor v1.5.2 (1)",
+            osVersion: "macOS 14.0",
+            appVersion: "TestApp v1.0.0 (1)",
             timezone: "Asia/Kolkata",
             locale: "en_IN"
         )
-        let deepLink = "https://go.postman.co/workspace/ws-12345/request/req-67890"
         let note = "Tested attendee lookup under organizer UUID scope."
 
         let payload = TeamsAdaptiveCardBuilder.buildPayload(
             curlString: curl,
             diagnostics: diagnostics,
-            postmanDeepLink: deepLink,
             developerNote: note
         )
 
@@ -41,16 +40,13 @@ final class TeamsAdaptiveCardBuilderTests: XCTestCase {
         XCTAssertEqual(content["version"] as? String, "1.4")
         XCTAssertEqual(content["$schema"] as? String, "http://adaptivecards.io/schemas/adaptive-card.json")
 
-        // Actions array verification
-        guard let actions = content["actions"] as? [[String: Any]],
-              let openAction = actions.first else {
-            XCTFail("Missing Action.OpenUrl action")
-            return
+        // Assert "Open in Postman" action is REMOVED
+        if let actions = content["actions"] as? [[String: Any]] {
+            for action in actions {
+                let title = action["title"] as? String ?? ""
+                XCTAssertFalse(title.contains("Postman"), "Adaptive card actions must NOT contain Open in Postman")
+            }
         }
-
-        XCTAssertEqual(openAction["type"] as? String, "Action.OpenUrl")
-        XCTAssertEqual(openAction["title"] as? String, "🚀 Open in Postman")
-        XCTAssertEqual(openAction["url"] as? String, deepLink)
 
         // Monospace Code Fence container verification
         guard let body = content["body"] as? [[String: Any]] else {
@@ -81,31 +77,65 @@ final class TeamsAdaptiveCardBuilderTests: XCTestCase {
         XCTAssertTrue(foundCodeFence, "Must contain code fence with ```bash")
     }
 
-    func testAdaptiveCardWithoutDeepLink() {
-        let curl = "curl -X GET 'https://api.example.com'"
-        let diagnostics = TeamsAdaptiveCardBuilder.DeviceDiagnostics.current()
+    func testAdaptiveCardWithAISuggestionsAndAnalytics() {
+        let url = URL(string: "https://api.example.com/api/getUser?apiKey=secret_123")!
+        let reqBody = "{\"name\":\"Alice\"}".data(using: .utf8)
+        let req = NetworkRequest(url: url, method: "GET", headers: [:], body: reqBody, rawBody: reqBody)
+
+        let resBody = "{\"success\": false, \"error\": \"User not found\"}".data(using: .utf8)
+        let res = NetworkResponse(statusCode: 200, headers: ["Content-Type": "application/json"], body: resBody)
+
+        let metrics = NetworkTaskMetrics(
+            dnsDuration: 0.012,
+            connectDuration: 0.024,
+            tlsDuration: 0.035,
+            requestDuration: 0.005,
+            waitDuration: 0.150,
+            responseDuration: 0.010,
+            totalDuration: 0.236
+        )
+
+        let tx = NetworkTransaction(
+            request: req,
+            response: res,
+            duration: 0.236,
+            metrics: metrics,
+            status: .success
+        )
 
         let payload = TeamsAdaptiveCardBuilder.buildPayload(
-            curlString: curl,
-            diagnostics: diagnostics,
-            postmanDeepLink: nil,
-            developerNote: nil
+            transaction: tx,
+            developerNote: "AI Standards Review Check",
+            includeAISuggestions: true,
+            includeAnalytics: true
         )
 
         guard let attachments = payload["attachments"] as? [[String: Any]],
               let content = attachments.first?["content"] as? [String: Any],
-              let actions = content["actions"] as? [[String: Any]] else {
+              let body = content["body"] as? [[String: Any]] else {
             XCTFail("Malformed payload")
             return
         }
 
-        // Even without an explicit Postman Cloud deep link, the card embeds the universal web import bridge
-        XCTAssertFalse(actions.isEmpty, "Actions must include the universal 1-click Postman open link when postmanDeepLink is nil")
-        let firstAction = actions.first
-        XCTAssertEqual(firstAction?["type"] as? String, "Action.OpenUrl")
-        XCTAssertEqual(firstAction?["title"] as? String, "🚀 Open in Postman")
-        let url = firstAction?["url"] as? String ?? ""
-        XCTAssertTrue(url.contains("import.html#data=") || url.contains("import.html#curl="))
+        var foundAISuggestions = false
+        var foundAnalytics = false
+
+        for element in body {
+            if let items = element["items"] as? [[String: Any]] {
+                for item in items {
+                    let text = item["text"] as? String ?? ""
+                    if text.contains("AI Suggestions & API Standards") {
+                        foundAISuggestions = true
+                    }
+                    if text.contains("Request Analytics & Waterfall Timings") {
+                        foundAnalytics = true
+                    }
+                }
+            }
+        }
+
+        XCTAssertTrue(foundAISuggestions, "Card must include AI Suggestions section")
+        XCTAssertTrue(foundAnalytics, "Card must include Request Analytics section")
     }
 
     func testAdaptiveCardWithAuthenticatedUserAndQueryOrg() {

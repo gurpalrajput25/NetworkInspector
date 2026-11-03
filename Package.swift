@@ -51,7 +51,7 @@ let package = Package(
         ),
         .target(
             name: "NetworkInspectorIntegrations",
-            dependencies: ["NetworkInspectorCore", "NetworkInspectorPrivacy"]
+            dependencies: ["NetworkInspectorCore", "NetworkInspectorPrivacy", "NetworkInspectorAnalytics"]
         ),
         .target(
             name: "NetworkInspectorURLSession",
@@ -110,7 +110,7 @@ let package = Package(
         ),
         .testTarget(
             name: "NetworkInspectorIntegrationsTests",
-            dependencies: ["NetworkInspectorIntegrations", "NetworkInspectorCore", "NetworkInspectorPrivacy"]
+            dependencies: ["NetworkInspectorIntegrations", "NetworkInspectorCore", "NetworkInspectorPrivacy", "NetworkInspectorAnalytics"]
         )
     ]
 )

@@ -101,7 +101,8 @@ public enum NetworkInspector {
         TeamsIntegration.shared.configure(webhookURL: webhookURL, environmentName: environmentName)
     }
 
-    /// Configures Postman Cloud synchronization for 1-click execution (`🚀 Open in Postman` button).
+    /// Retained for backward compatibility.
+    @available(*, deprecated, message: "Postman synchronization is deprecated in favor of native API standards & AI suggestions.")
     public static func configurePostman(apiKey: String, collectionUid: String, workspaceId: String) {
         TeamsIntegration.shared.configurePostman(apiKey: apiKey, collectionUid: collectionUid, workspaceId: workspaceId)
     }

@@ -1,5 +1,6 @@
 import XCTest
 import NetworkInspectorCore
+import NetworkInspectorAnalytics
 @testable import NetworkInspectorIntegrations
 
 final class TeamsNotificationBuilderTests: XCTestCase {
@@ -25,6 +26,14 @@ final class TeamsNotificationBuilderTests: XCTestCase {
 
         XCTAssertEqual(card["type"] as? String, "AdaptiveCard")
         XCTAssertEqual(card["version"] as? String, "1.5")
+
+        // Assert Open in Postman is not in actions
+        if let actions = card["actions"] as? [[String: Any]] {
+            for action in actions {
+                let title = action["title"] as? String ?? ""
+                XCTAssertFalse(title.contains("Postman"), "Adaptive Card actions must NOT contain Open in Postman")
+            }
+        }
 
         guard let body = card["body"] as? [[String: Any]] else {
             XCTFail("Missing body array in Adaptive Card")
@@ -68,7 +77,7 @@ final class TeamsNotificationBuilderTests: XCTestCase {
             }
         }
 
-        XCTAssertTrue(foundSingleLineCodeBlock, "Adaptive Card must include 1-line CodeBlock for 1-click Postman import")
+        XCTAssertTrue(foundSingleLineCodeBlock, "Adaptive Card must include 1-line CodeBlock for direct execution")
         XCTAssertTrue(foundMultiLineCodeBlock, "Adaptive Card must include multi-line CodeBlock for terminal inspection")
     }
 
@@ -109,5 +118,50 @@ final class TeamsNotificationBuilderTests: XCTestCase {
         XCTAssertTrue(foundReqPayloadPeek, "Adaptive card must include request payload peek for backend inspection")
         XCTAssertTrue(foundServerErrorPeek, "Adaptive card must include server error response peek for fast debugging")
     }
-}
 
+    func testAdaptiveCardMessagePayloadWithAISuggestionsAndAnalytics() {
+        let url = URL(string: "https://api.example.com/api/deleteUser?apiKey=secret_xyz")!
+        let reqBody = "{\"user\":\"123\"}".data(using: .utf8)
+        let req = NetworkRequest(url: url, method: "GET", headers: [:], body: reqBody, rawBody: reqBody)
+        let resBody = "{\"success\": false, \"error\": \"User not found\"}".data(using: .utf8)
+        let res = NetworkResponse(statusCode: 200, headers: ["Content-Type": "application/json"], body: resBody)
+
+        let tx = NetworkTransaction(request: req, response: res, status: .success)
+
+        let message = TeamsNotificationBuilder.buildMessagePayload(
+            transaction: tx,
+            developerNote: "Developer Review",
+            includeAISuggestions: true,
+            includeAnalytics: true
+        )
+
+        XCTAssertEqual(message["type"] as? String, "message")
+        guard let attachments = message["attachments"] as? [[String: Any]],
+              let first = attachments.first,
+              let card = first["content"] as? [String: Any],
+              let body = card["body"] as? [[String: Any]] else {
+            XCTFail("Missing message card content")
+            return
+        }
+
+        var foundAISuggestions = false
+        var foundAnalytics = false
+
+        for item in body {
+            if let containerItems = item["items"] as? [[String: Any]] {
+                for sub in containerItems {
+                    let text = sub["text"] as? String ?? ""
+                    if text.contains("AI Suggestions & API Standards Audit") {
+                        foundAISuggestions = true
+                    }
+                    if text.contains("Request Analytics & Waterfall Timings") {
+                        foundAnalytics = true
+                    }
+                }
+            }
+        }
+
+        XCTAssertTrue(foundAISuggestions, "Message envelope must contain AI Suggestions section")
+        XCTAssertTrue(foundAnalytics, "Message envelope must contain Request Analytics section")
+    }
+}

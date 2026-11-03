@@ -2,6 +2,7 @@ import SwiftUI
 import NetworkInspectorCore
 import NetworkInspectorStorage
 import NetworkInspectorIntegrations
+import NetworkInspectorAnalytics
 
 public struct TeamsShareView: View {
     public let transaction: NetworkTransaction
@@ -10,17 +11,14 @@ public struct TeamsShareView: View {
     @State private var developerNote: String = ""
     @State private var webhookURLString: String = ""
     @State private var includeLiveToken: Bool = true
+    @State private var includeAISuggestions: Bool = true
+    @State private var includeAnalytics: Bool = true
+    @State private var showAISuggestionsPreview: Bool = false
     @State private var isSending = false
     @State private var errorMessage: String?
     @State private var showSuccessOverlay = false
     @State private var planeOffset: CGFloat = 0
     @State private var pulseGlow = false
-
-    @AppStorage("network_inspector_postman_api_key") private var postmanApiKey: String = ""
-    @AppStorage("network_inspector_postman_collection_uid") private var postmanCollectionUid: String = ""
-    @AppStorage("network_inspector_postman_workspace_id") private var postmanWorkspaceId: String = ""
-    @State private var enablePostmanSync: Bool = true
-    @State private var generatedPostmanDeepLink: String? = nil
 
     public init(transaction: NetworkTransaction) {
         self.transaction = transaction
@@ -37,6 +35,14 @@ public struct TeamsShareView: View {
         DeviceDiagnosticInfo.current()
     }
 
+    private var aiReport: APISuggestionReport {
+        APISuggestionEngine.analyze(transaction: transaction)
+    }
+
+    private var requestAnalytics: RequestAnalytics {
+        RequestAnalyticsBuilder.build(for: transaction)
+    }
+
     public var body: some View {
         ZStack {
             ScrollView {
@@ -51,11 +57,14 @@ public struct TeamsShareView: View {
                         noUserCard
                     }
 
-                    // ⚡️ Live Token (Postman Ready) Toggle
-                    liveTokenCard
+                    // 🤖 AI Suggestions & Standards Card
+                    aiSuggestionsCard
 
-                    // 🚀 Postman Cloud 1-Click Sync Card
-                    postmanSyncCard
+                    // 📊 Request Analytics & Timings Card
+                    analyticsToggleCard
+
+                    // ⚡️ Live Token Toggle
+                    liveTokenCard
 
                     // 📱 Device Diagnostics Card
                     deviceDiagnosticsCard
@@ -102,11 +111,6 @@ public struct TeamsShareView: View {
             if let saved = TeamsIntegration.shared.webhookURL?.absoluteString {
                 webhookURLString = saved
             }
-            if let p = TeamsIntegration.shared.postmanService {
-                if postmanApiKey.isEmpty { postmanApiKey = p.apiKey }
-                if postmanCollectionUid.isEmpty { postmanCollectionUid = p.collectionUid }
-                if postmanWorkspaceId.isEmpty { postmanWorkspaceId = p.workspaceId }
-            }
             withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
                 pulseGlow = true
             }
@@ -125,13 +129,165 @@ public struct TeamsShareView: View {
                     .lineLimit(1)
             }
 
-            Text("Send diagnostic trace, decoded JWT user identity, device profile & cURL to Teams.")
+            Text("Dispatch diagnostic trace, AI suggestions, and performance analytics to Teams.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
         .padding()
         .background(Color.inspectorSecondaryBackground)
         .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var aiSuggestionsCard: some View {
+        let report = aiReport
+        return VStack(alignment: .leading, spacing: 10) {
+            Toggle(isOn: $includeAISuggestions) {
+                HStack(spacing: 10) {
+                    Image(systemName: "sparkles.rectangle.stack.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(includeAISuggestions ? .purple : .secondary)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text("AI Suggestions & Standards")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("\(report.overallScore)/100 (Grade \(report.grade))")
+                                .font(.system(size: 10, weight: .bold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(report.overallScore >= 80 ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
+                                .foregroundColor(report.overallScore >= 80 ? .green : .orange)
+                                .clipShape(Capsule())
+                        }
+                        Text("Shares API standards review, spotted mistakes, and recommended syntax fixes.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            if includeAISuggestions {
+                Divider()
+
+                HStack {
+                    Text(report.statusSummary)
+                        .font(.caption.bold())
+                        .foregroundColor(report.errorCount > 0 ? .red : (report.warningCount > 0 ? .orange : .green))
+
+                    Spacer()
+
+                    Button {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            showAISuggestionsPreview.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(showAISuggestionsPreview ? "Hide Preview" : "View Preview")
+                            Image(systemName: showAISuggestionsPreview ? "chevron.up" : "chevron.down")
+                        }
+                        .font(.caption.bold())
+                        .foregroundColor(.accentColor)
+                    }
+                }
+
+                if showAISuggestionsPreview {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(report.summary)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        if !report.spottedMistakes.isEmpty {
+                            ForEach(report.spottedMistakes.prefix(3)) { mistake in
+                                HStack(alignment: .top, spacing: 6) {
+                                    Text(mistake.severity.emoji)
+                                        .font(.caption)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(mistake.title)
+                                            .font(.caption.bold())
+                                        Text("Fix: \(mistake.suggestedFix)")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.inspectorCardBackground)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+        }
+        .padding(12)
+        .background(Color.inspectorSecondaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var analyticsToggleCard: some View {
+        let analytics = requestAnalytics
+        return VStack(alignment: .leading, spacing: 10) {
+            Toggle(isOn: $includeAnalytics) {
+                HStack(spacing: 10) {
+                    Image(systemName: "gauge.with.dots.needle.bottom.50percent")
+                        .font(.system(size: 20))
+                        .foregroundColor(includeAnalytics ? .blue : .secondary)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text("Request Analytics & Timings")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text(transaction.formattedDuration)
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.blue.opacity(0.15))
+                                .foregroundColor(.blue)
+                                .clipShape(Capsule())
+                        }
+                        Text("Shares waterfall timings, byte transfer stats, and network protocol.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            if includeAnalytics {
+                Divider()
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Protocol")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(analytics.networkProtocol)
+                            .font(.caption.bold().monospaced())
+                    }
+                    Spacer()
+                    VStack(alignment: .center, spacing: 2) {
+                        Text("Transferred")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(ByteCountFormatter.string(fromByteCount: analytics.totalDataTransferred, countStyle: .file))
+                            .font(.caption.bold().monospaced())
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("Performance")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(analytics.performanceTier.rawValue.components(separatedBy: " (").first ?? "Normal")
+                            .font(.caption.bold())
+                            .foregroundColor(.accentColor)
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
+        }
+        .padding(12)
+        .background(Color.inspectorSecondaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private func userProfileCard(user: JWTUserDetails) -> some View {
@@ -246,70 +402,13 @@ public struct TeamsShareView: View {
                         .foregroundColor(includeLiveToken ? .green : .secondary)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Live Token (Direct Postman Import)")
+                        Text("Live Authorization Token (Direct Execution)")
                             .font(.system(size: 14, weight: .semibold))
-                        Text(includeLiveToken ? "Sends unmasked Bearer token in cURL so teammates can import & execute directly in Postman." : "Token is masked ([REDACTED]) for security.")
+                        Text(includeLiveToken ? "Sends unmasked Bearer token in cURL so teammates can execute requests directly." : "Token is masked ([REDACTED]) for security.")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
                 }
-            }
-        }
-        .padding(12)
-        .background(Color.inspectorSecondaryBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var postmanSyncCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Toggle(isOn: $enablePostmanSync) {
-                HStack(spacing: 10) {
-                    Image(systemName: "paperplane.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(enablePostmanSync ? .orange : .secondary)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Postman Cloud 1-Click Sync")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("Pushes request directly to QA Postman collection and embeds a '🚀 Open in Postman' button in Teams.")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-
-            if enablePostmanSync {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Postman API Key (PMAK-...)")
-                        .font(.caption2.bold())
-                        .foregroundColor(.secondary)
-                    SecureField("PMAK-...", text: $postmanApiKey)
-                        .font(.system(size: 12, design: .monospaced))
-                        .padding(8)
-                        .background(Color.inspectorCardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                    Text("Target Collection UID (<workspace_id>-<collection_uuid>)")
-                        .font(.caption2.bold())
-                        .foregroundColor(.secondary)
-                    TextField("12345678-abcd-ef01-...", text: $postmanCollectionUid)
-                        .font(.system(size: 12, design: .monospaced))
-                        .padding(8)
-                        .background(Color.inspectorCardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .autocorrectionDisabled()
-
-                    Text("Workspace ID")
-                        .font(.caption2.bold())
-                        .foregroundColor(.secondary)
-                    TextField("12345678-...", text: $postmanWorkspaceId)
-                        .font(.system(size: 12, design: .monospaced))
-                        .padding(8)
-                        .background(Color.inspectorCardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .autocorrectionDisabled()
-                }
-                .padding(.top, 4)
             }
         }
         .padding(12)
@@ -432,29 +531,11 @@ public struct TeamsShareView: View {
                     .font(.title2.bold())
                     .foregroundColor(.white)
 
-                Text(generatedPostmanDeepLink != nil
-                    ? "Diagnostic trace and cURL were delivered with a 1-click '🚀 Open in Postman' button."
-                    : "Diagnostic trace, user profile, and cURL were delivered.")
+                Text("Diagnostic trace, AI standards suggestions, and request analytics were successfully delivered.")
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
-
-                if let deepLink = generatedPostmanDeepLink, let url = URL(string: deepLink) {
-                    Link(destination: url) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.up.right.square.fill")
-                            Text("Open in Postman")
-                        }
-                        .font(.headline)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 10)
-                        .background(Color.orange)
-                        .foregroundColor(.white)
-                        .clipShape(Capsule())
-                    }
-                    .padding(.top, 4)
-                }
 
                 Button {
                     withAnimation {
@@ -497,27 +578,19 @@ public struct TeamsShareView: View {
             planeOffset = 15
         }
 
-        if enablePostmanSync && !postmanApiKey.isEmpty && !postmanCollectionUid.isEmpty && !postmanWorkspaceId.isEmpty {
-            TeamsIntegration.shared.configurePostman(
-                apiKey: postmanApiKey.trimmingCharacters(in: .whitespacesAndNewlines),
-                collectionUid: postmanCollectionUid.trimmingCharacters(in: .whitespacesAndNewlines),
-                workspaceId: postmanWorkspaceId.trimmingCharacters(in: .whitespacesAndNewlines)
-            )
-        }
-
         TeamsIntegration.shared.send(
             transaction: transaction,
             developerNote: developerNote.isEmpty ? nil : developerNote,
             customWebhookURL: url,
             customUser: userDetails,
             maskTokens: !includeLiveToken,
-            syncToPostman: enablePostmanSync && !postmanApiKey.isEmpty
+            includeAISuggestions: includeAISuggestions,
+            includeAnalytics: includeAnalytics
         ) { result in
             isSending = false
             planeOffset = 0
             switch result {
-            case .success(let deepLink):
-                generatedPostmanDeepLink = deepLink
+            case .success:
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                     showSuccessOverlay = true
                 }

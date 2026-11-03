@@ -1,5 +1,6 @@
 import Foundation
 import NetworkInspectorCore
+import NetworkInspectorAnalytics
 
 public final class TeamsIntegration: @unchecked Sendable {
     public static let shared = TeamsIntegration()
@@ -29,7 +30,8 @@ public final class TeamsIntegration: @unchecked Sendable {
         self.environmentName = environmentName
     }
 
-    /// Configures Postman Cloud API synchronization for 1-click execution.
+    /// Retained for backward compatibility.
+    @available(*, deprecated, message: "Postman synchronization is deprecated in favor of native API standards & AI suggestions.")
     public func configurePostman(apiKey: String, collectionUid: String, workspaceId: String) {
         self.postmanService = PostmanCloudService(
             apiKey: apiKey,
@@ -38,15 +40,16 @@ public final class TeamsIntegration: @unchecked Sendable {
         )
     }
 
-    /// Dispatches a trace to Teams, optionally synchronizing with Postman Cloud to generate an "🚀 Open in Postman" deep link button.
+    /// Dispatches a trace to Teams with optional AI Suggestions and Request Analytics.
     public func send(
         transaction: NetworkTransaction,
         developerNote: String? = nil,
         customWebhookURL: URL? = nil,
         customUser: JWTUserDetails? = nil,
         maskTokens: Bool = false,
-        syncToPostman: Bool = true,
-        completion: @escaping (Result<String?, Error>) -> Void
+        includeAISuggestions: Bool = true,
+        includeAnalytics: Bool = true,
+        completion: @escaping (Result<Void, Error>) -> Void
     ) {
         guard let targetURL = customWebhookURL ?? self.webhookURL else {
             completion(.failure(NSError(
@@ -57,92 +60,28 @@ public final class TeamsIntegration: @unchecked Sendable {
             return
         }
 
-        // If Postman Cloud Service is configured and syncToPostman is enabled, push first to Postman Cloud
-        if syncToPostman, let postman = self.postmanService {
-            postman.exportTransaction(transaction: transaction, maskTokens: maskTokens) { [weak self] postmanResult in
-                guard let self = self else { return }
-                let deepLink = try? postmanResult.get()
-                self.dispatchToTeams(
-                    transaction: transaction,
-                    targetURL: targetURL,
-                    postmanDeepLink: deepLink,
-                    developerNote: developerNote,
-                    customUser: customUser,
-                    maskTokens: maskTokens
-                ) { teamsResult in
-                    switch teamsResult {
-                    case .success:
-                        completion(.success(deepLink))
-                    case .failure(let error):
-                        completion(.failure(error))
-                    }
-                }
-            }
-        } else {
-            let universalLink = PostmanLinkBuilder.buildImportLink(
-                curlString: CurlFormatter.format(transaction: transaction, maskTokens: maskTokens),
-                transaction: transaction
-            )
-            dispatchToTeams(
-                transaction: transaction,
-                targetURL: targetURL,
-                postmanDeepLink: universalLink,
-                developerNote: developerNote,
-                customUser: customUser,
-                maskTokens: maskTokens
-            ) { teamsResult in
-                switch teamsResult {
-                case .success:
-                    completion(.success(universalLink))
-                case .failure(let error):
-                    completion(.failure(error))
-                }
-            }
-        }
-    }
+        let aiReport = includeAISuggestions ? APISuggestionEngine.analyze(transaction: transaction) : nil
+        let analytics = includeAnalytics ? RequestAnalyticsBuilder.build(for: transaction) : nil
 
-    /// Backward-compatible overload returning `Result<Void, Error>`
-    public func send(
-        transaction: NetworkTransaction,
-        developerNote: String? = nil,
-        customWebhookURL: URL? = nil,
-        customUser: JWTUserDetails? = nil,
-        maskTokens: Bool = false,
-        completion: @escaping (Result<Void, Error>) -> Void
-    ) {
-        send(
+        let card = TeamsNotificationBuilder.buildAdaptiveCard(
             transaction: transaction,
             developerNote: developerNote,
-            customWebhookURL: customWebhookURL,
+            environmentName: self.environmentName,
             customUser: customUser,
             maskTokens: maskTokens,
-            syncToPostman: postmanService != nil
-        ) { result in
-            switch result {
-            case .success:
-                completion(.success(()))
-            case .failure(let error):
-                completion(.failure(error))
-            }
-        }
-    }
-
-    private func dispatchToTeams(
-        transaction: NetworkTransaction,
-        targetURL: URL,
-        postmanDeepLink: String?,
-        developerNote: String?,
-        customUser: JWTUserDetails?,
-        maskTokens: Bool,
-        completion: @escaping (Result<Void, Error>) -> Void
-    ) {
-        let payload = TeamsAdaptiveCardBuilder.buildPayload(
-            transaction: transaction,
-            postmanDeepLink: postmanDeepLink,
-            developerNote: developerNote,
-            userDetails: customUser,
-            maskTokens: maskTokens
+            aiSuggestionReport: aiReport,
+            requestAnalytics: analytics
         )
+
+        let payload: [String: Any] = [
+            "type": "message",
+            "attachments": [
+                [
+                    "contentType": "application/vnd.microsoft.card.adaptive",
+                    "content": card
+                ]
+            ]
+        ]
 
         guard let bodyData = try? JSONSerialization.data(withJSONObject: payload, options: []) else {
             completion(.failure(NSError(
@@ -176,5 +115,54 @@ public final class TeamsIntegration: @unchecked Sendable {
                 DispatchQueue.main.async { completion(.failure(err)) }
             }
         }.resume()
+    }
+
+    /// Backward-compatible overload with syncToPostman parameter (ignored).
+    public func send(
+        transaction: NetworkTransaction,
+        developerNote: String? = nil,
+        customWebhookURL: URL? = nil,
+        customUser: JWTUserDetails? = nil,
+        maskTokens: Bool = false,
+        syncToPostman: Bool = false,
+        completion: @escaping (Result<String?, Error>) -> Void
+    ) {
+        send(
+            transaction: transaction,
+            developerNote: developerNote,
+            customWebhookURL: customWebhookURL,
+            customUser: customUser,
+            maskTokens: maskTokens,
+            includeAISuggestions: true,
+            includeAnalytics: true
+        ) { result in
+            switch result {
+            case .success:
+                completion(.success(nil))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    /// Backward-compatible overload returning `Result<Void, Error>`
+    public func send(
+        transaction: NetworkTransaction,
+        developerNote: String? = nil,
+        customWebhookURL: URL? = nil,
+        customUser: JWTUserDetails? = nil,
+        maskTokens: Bool = false,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        send(
+            transaction: transaction,
+            developerNote: developerNote,
+            customWebhookURL: customWebhookURL,
+            customUser: customUser,
+            maskTokens: maskTokens,
+            includeAISuggestions: true,
+            includeAnalytics: true,
+            completion: completion
+        )
     }
 }
