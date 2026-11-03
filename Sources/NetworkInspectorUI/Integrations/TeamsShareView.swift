@@ -7,6 +7,7 @@ import NetworkInspectorAnalytics
 public struct TeamsShareView: View {
     public let transaction: NetworkTransaction
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var developerNote: String = ""
     @State private var webhookURLString: String = ""
@@ -83,6 +84,7 @@ public struct TeamsShareView: View {
                             Text(err)
                                 .font(.caption)
                                 .foregroundColor(.red)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(.horizontal, 4)
                         .transition(.opacity.combined(with: .move(edge: .top)))
@@ -93,6 +95,7 @@ public struct TeamsShareView: View {
                 }
                 .padding()
             }
+            .background(Color.inspectorBackground)
 
             // Success Overlay Animation
             if showSuccessOverlay {
@@ -100,6 +103,7 @@ public struct TeamsShareView: View {
                     .transition(.scale.combined(with: .opacity))
             }
         }
+        .background(Color.inspectorBackground)
         .navigationTitle("Share to Teams")
         .inspectorNavigationTitleDisplayModeInline()
         .toolbar {
@@ -121,12 +125,13 @@ public struct TeamsShareView: View {
 
     private var headerCard: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            HStack(alignment: .top) {
                 MethodBadgeView(method: transaction.request.rawMethod)
                 StatusBadgeView(statusCode: transaction.response?.statusCode)
                 Text(transaction.request.path)
                     .font(.headline)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Text("Dispatch diagnostic trace, AI suggestions, and performance analytics to Teams.")
@@ -135,6 +140,10 @@ public struct TeamsShareView: View {
         }
         .padding()
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -168,6 +177,7 @@ public struct TeamsShareView: View {
 
             if includeAISuggestions {
                 Divider()
+                    .overlay(Color.inspectorCardBorder)
 
                 HStack {
                     Text(report.statusSummary)
@@ -195,6 +205,7 @@ public struct TeamsShareView: View {
                         Text(report.summary)
                             .font(.caption)
                             .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
 
                         if !report.spottedMistakes.isEmpty {
                             ForEach(report.spottedMistakes.prefix(3)) { mistake in
@@ -204,14 +215,20 @@ public struct TeamsShareView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(mistake.title)
                                             .font(.caption.bold())
+                                            .fixedSize(horizontal: false, vertical: true)
                                         Text("Fix: \(mistake.suggestedFix)")
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
                                     }
                                 }
                                 .padding(8)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(Color.inspectorCardBackground)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.inspectorCardBorder, lineWidth: 1)
+                                )
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                             }
                         }
@@ -223,6 +240,10 @@ public struct TeamsShareView: View {
         }
         .padding(12)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -256,6 +277,7 @@ public struct TeamsShareView: View {
 
             if includeAnalytics {
                 Divider()
+                    .overlay(Color.inspectorCardBorder)
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Protocol")
@@ -287,6 +309,10 @@ public struct TeamsShareView: View {
         }
         .padding(12)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -348,6 +374,7 @@ public struct TeamsShareView: View {
             }
 
             Divider()
+                .overlay(Color.inspectorCardBorder)
 
             HStack {
                 if let uid = user.userId {
@@ -390,6 +417,10 @@ public struct TeamsShareView: View {
         }
         .padding(12)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -413,6 +444,10 @@ public struct TeamsShareView: View {
         }
         .padding(12)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -438,6 +473,10 @@ public struct TeamsShareView: View {
         }
         .padding(12)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -451,6 +490,10 @@ public struct TeamsShareView: View {
                 .font(.system(size: 13, design: .monospaced))
                 .padding(10)
                 .background(Color.inspectorCardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.inspectorCardBorder, lineWidth: 1)
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .autocorrectionDisabled()
                 #if os(iOS)
@@ -459,6 +502,10 @@ public struct TeamsShareView: View {
         }
         .padding()
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -472,10 +519,18 @@ public struct TeamsShareView: View {
                 .frame(height: 80)
                 .padding(4)
                 .background(Color.inspectorCardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.inspectorCardBorder, lineWidth: 1)
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .padding()
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -512,7 +567,7 @@ public struct TeamsShareView: View {
 
     private var successOverlayView: some View {
         ZStack {
-            Color.black.opacity(0.4)
+            Color.black.opacity(colorScheme == .dark ? 0.6 : 0.4)
                 .ignoresSafeArea()
 
             VStack(spacing: 16) {
@@ -533,7 +588,7 @@ public struct TeamsShareView: View {
 
                 Text("Diagnostic trace, AI standards suggestions, and request analytics were successfully delivered.")
                     .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.white.opacity(0.85))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
 
@@ -555,6 +610,10 @@ public struct TeamsShareView: View {
             }
             .padding(28)
             .background(Color.inspectorCardBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: 24)
+                    .stroke(Color.inspectorCardBorder, lineWidth: 1)
+            )
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .shadow(radius: 20)
             .padding(.horizontal, 32)

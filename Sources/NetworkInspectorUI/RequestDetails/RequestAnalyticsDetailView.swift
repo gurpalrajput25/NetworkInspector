@@ -5,6 +5,7 @@ import NetworkInspectorAnalytics
 public struct RequestAnalyticsDetailView: View {
     public let transaction: NetworkTransaction
     public var hostAverageDuration: TimeInterval? = nil
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(transaction: NetworkTransaction, hostAverageDuration: TimeInterval? = nil) {
         self.transaction = transaction
@@ -40,7 +41,7 @@ public struct RequestAnalyticsDetailView: View {
         HStack(spacing: 16) {
             ZStack {
                 Circle()
-                    .fill(tierColor.opacity(0.15))
+                    .fill(tierColor.opacity(colorScheme == .dark ? 0.25 : 0.15))
                     .frame(width: 68, height: 68)
 
                 Image(systemName: "timer")
@@ -57,7 +58,7 @@ public struct RequestAnalyticsDetailView: View {
                         .font(.caption.bold())
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
-                        .background(tierColor.opacity(0.15))
+                        .background(tierColor.opacity(colorScheme == .dark ? 0.25 : 0.15))
                         .foregroundColor(tierColor)
                         .clipShape(Capsule())
                 }
@@ -70,11 +71,16 @@ public struct RequestAnalyticsDetailView: View {
                     Text(comp)
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
         .padding(14)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -99,7 +105,7 @@ public struct RequestAnalyticsDetailView: View {
             // Phase Legend & Details Table
             VStack(spacing: 8) {
                 ForEach(analytics.phases) { phase in
-                    HStack {
+                    HStack(spacing: 8) {
                         Circle()
                             .fill(colorForName(phase.colorName))
                             .frame(width: 8, height: 8)
@@ -107,28 +113,37 @@ public struct RequestAnalyticsDetailView: View {
                         Text(phase.name)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(.primary)
+                            .lineLimit(1)
 
-                        Spacer()
+                        Spacer(minLength: 4)
 
                         Text(phase.formattedPercentage)
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundColor(.secondary)
-                            .frame(width: 55, alignment: .trailing)
+                            .fixedSize(horizontal: true, vertical: false)
 
                         Text(phase.formattedDuration)
                             .font(.system(size: 13, weight: .bold, design: .monospaced))
                             .foregroundColor(.primary)
-                            .frame(width: 75, alignment: .trailing)
+                            .fixedSize(horizontal: true, vertical: false)
                     }
                     .padding(.vertical, 2)
                 }
             }
-            .padding(10)
+            .padding(12)
             .background(Color.inspectorCardBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.inspectorCardBorder, lineWidth: 1)
+            )
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .padding(14)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -150,16 +165,17 @@ public struct RequestAnalyticsDetailView: View {
                     .font(.system(size: 20))
                     .foregroundColor(analytics.isCompressed ? .green : .secondary)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     HStack {
                         Text("Content-Encoding: \(analytics.contentEncoding)")
                             .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.primary)
                         if analytics.isCompressed {
                             Text("COMPRESSED")
                                 .font(.system(size: 9, weight: .heavy))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.green.opacity(0.15))
+                                .background(Color.green.opacity(colorScheme == .dark ? 0.25 : 0.15))
                                 .foregroundColor(.green)
                                 .clipShape(Capsule())
                         }
@@ -169,10 +185,12 @@ public struct RequestAnalyticsDetailView: View {
                         Text("Transferred: \(ByteCountFormatter.string(fromByteCount: analytics.responseBodyBytes, countStyle: .file)) • Estimated Uncompressed: ~\(ByteCountFormatter.string(fromByteCount: uncompressed, countStyle: .file)) (~74% bandwidth saved)")
                             .font(.caption2)
                             .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     } else if analytics.responseBodyBytes > 50000 && !analytics.isCompressed {
                         Text("Payload exceeds 50 KB without compression. Enabling Gzip/Brotli on the server is recommended.")
                             .font(.caption2)
                             .foregroundColor(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
                     } else {
                         Text("No transport compression applied.")
                             .font(.caption2)
@@ -180,13 +198,21 @@ public struct RequestAnalyticsDetailView: View {
                     }
                 }
             }
-            .padding(10)
+            .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.inspectorCardBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.inspectorCardBorder, lineWidth: 1)
+            )
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .padding(14)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -202,12 +228,20 @@ public struct RequestAnalyticsDetailView: View {
                 infoRow(title: "Host", value: transaction.request.host)
                 infoRow(title: "Scheme", value: transaction.request.scheme.uppercased())
             }
-            .padding(10)
+            .padding(12)
             .background(Color.inspectorCardBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.inspectorCardBorder, lineWidth: 1)
+            )
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .padding(14)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -227,12 +261,20 @@ public struct RequestAnalyticsDetailView: View {
                     infoRow(title: "ETag", value: etag)
                 }
             }
-            .padding(10)
+            .padding(12)
             .background(Color.inspectorCardBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.inspectorCardBorder, lineWidth: 1)
+            )
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .padding(14)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -246,26 +288,34 @@ public struct RequestAnalyticsDetailView: View {
             Text(value)
                 .font(.system(size: 15, weight: .bold, design: .monospaced))
                 .foregroundColor(.primary)
+                .fixedSize(horizontal: false, vertical: true)
             Text(subtitle)
                 .font(.system(size: 10))
                 .foregroundColor(.secondary)
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.inspectorCardBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private func infoRow(title: String, value: String) -> some View {
-        HStack {
+        HStack(alignment: .top, spacing: 10) {
             Text(title)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.secondary)
+                .frame(width: 125, alignment: .leading)
             Spacer()
             Text(value)
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundColor(.primary)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
         }
         .padding(.vertical, 2)
@@ -292,4 +342,3 @@ public struct RequestAnalyticsDetailView: View {
         }
     }
 }
-

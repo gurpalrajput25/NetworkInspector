@@ -3,11 +3,48 @@ import NetworkInspectorCore
 import NetworkInspectorIntegrations
 import NetworkInspectorAnalytics
 
+public enum RequestDetailTab: Int, CaseIterable, Identifiable {
+    case overview = 0
+    case aiSuggestions = 1
+    case analytics = 2
+    case request = 3
+    case response = 4
+    case curl = 5
+    case multipart = 6
+
+    public var id: Int { rawValue }
+
+    public var title: String {
+        switch self {
+        case .overview: return "Overview"
+        case .aiSuggestions: return "AI Suggestions"
+        case .analytics: return "Analytics"
+        case .request: return "Request"
+        case .response: return "Response"
+        case .curl: return "cURL"
+        case .multipart: return "Multipart"
+        }
+    }
+
+    public var iconName: String {
+        switch self {
+        case .overview: return "info.circle.fill"
+        case .aiSuggestions: return "sparkles"
+        case .analytics: return "chart.xyaxis.line"
+        case .request: return "arrow.up.circle.fill"
+        case .response: return "arrow.down.circle.fill"
+        case .curl: return "terminal.fill"
+        case .multipart: return "doc.on.doc.fill"
+        }
+    }
+}
+
 public struct RequestDetailView: View {
     public let transaction: NetworkTransaction
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
-    @State private var selectedTab = 0
+    @State private var selectedTab: Int = RequestDetailTab.overview.rawValue
     @State private var showingTeamsShare = false
     @State private var isLiveCurlMode = true
 
@@ -15,46 +52,55 @@ public struct RequestDetailView: View {
         self.transaction = transaction
     }
 
+    private var availableTabs: [RequestDetailTab] {
+        var tabs: [RequestDetailTab] = [
+            .overview,
+            .aiSuggestions,
+            .analytics,
+            .request,
+            .response,
+            .curl
+        ]
+        if transaction.request.isMultipart || (transaction.multipartParts?.isEmpty == false) {
+            tabs.append(.multipart)
+        }
+        return tabs
+    }
+
+    private var aiReport: APISuggestionReport {
+        APISuggestionEngine.analyze(transaction: transaction)
+    }
+
     public var body: some View {
         VStack(spacing: 0) {
             // Summary header
             headerSummaryView
 
-            // Segmented Tab Picker
-            Picker("Detail Section", selection: $selectedTab) {
-                Text("Overview").tag(0)
-                Text("AI Suggestions").tag(1)
-                Text("Analytics").tag(2)
-                Text("Request").tag(3)
-                Text("Response").tag(4)
-                Text("cURL").tag(5)
-                if transaction.request.isMultipart || (transaction.multipartParts?.isEmpty == false) {
-                    Text("Multipart").tag(6)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            // Horizontally Scrollable Uncropped Tab Bar
+            customTabBarView
+
+            Divider()
+                .overlay(Color.inspectorCardBorder)
 
             // Content Section
             ScrollView {
                 VStack(spacing: 16) {
                     switch selectedTab {
-                    case 0:
+                    case RequestDetailTab.overview.rawValue:
                         overviewSection
-                    case 1:
+                    case RequestDetailTab.aiSuggestions.rawValue:
                         RequestAISuggestionsView(transaction: transaction) {
                             showingTeamsShare = true
                         }
-                    case 2:
+                    case RequestDetailTab.analytics.rawValue:
                         RequestAnalyticsDetailView(transaction: transaction)
-                    case 3:
+                    case RequestDetailTab.request.rawValue:
                         requestSection
-                    case 4:
+                    case RequestDetailTab.response.rawValue:
                         responseSection
-                    case 5:
+                    case RequestDetailTab.curl.rawValue:
                         curlSection
-                    case 6:
+                    case RequestDetailTab.multipart.rawValue:
                         multipartSection
                     default:
                         EmptyView()
@@ -62,7 +108,9 @@ public struct RequestDetailView: View {
                 }
                 .padding()
             }
+            .background(Color.inspectorBackground)
         }
+        .background(Color.inspectorBackground)
         .navigationTitle(transaction.request.path)
         .inspectorNavigationTitleDisplayModeInline()
         .toolbar {
@@ -96,36 +144,139 @@ public struct RequestDetailView: View {
         }
     }
 
+    // MARK: - Horizontally Scrollable Tab Bar (Zero Text Cropping)
+
+    private var customTabBarView: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(availableTabs) { tab in
+                        let isSelected = (selectedTab == tab.rawValue)
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedTab = tab.rawValue
+                                proxy.scrollTo(tab.id, anchor: .center)
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: tab.iconName)
+                                    .font(.system(size: 12, weight: isSelected ? .bold : .semibold))
+
+                                Text(tab.title)
+                                    .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                                    .fixedSize(horizontal: true, vertical: false)
+
+                                // Dynamic badges
+                                if tab == .aiSuggestions {
+                                    let issuesCount = aiReport.spottedMistakes.count
+                                    if issuesCount > 0 {
+                                        Text("\(issuesCount)")
+                                            .font(.system(size: 10, weight: .heavy))
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 1)
+                                            .background(
+                                                isSelected
+                                                    ? Color.white.opacity(0.3)
+                                                    : (aiReport.errorCount > 0 ? Color.red : Color.orange)
+                                            )
+                                            .foregroundColor(.white)
+                                            .clipShape(Capsule())
+                                    } else {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundColor(isSelected ? .white : .green)
+                                    }
+                                } else if tab == .response, let code = transaction.response?.statusCode {
+                                    Text("\(code)")
+                                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1)
+                                        .background(
+                                            isSelected
+                                                ? Color.white.opacity(0.25)
+                                                : ((200...299).contains(code) ? Color.green.opacity(0.2) : Color.red.opacity(0.2))
+                                        )
+                                        .foregroundColor(
+                                            isSelected
+                                                ? .white
+                                                : ((200...299).contains(code) ? .green : .red)
+                                        )
+                                        .clipShape(Capsule())
+                                }
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(
+                                isSelected
+                                    ? Color.accentColor
+                                    : Color.inspectorCardBackground
+                            )
+                            .foregroundColor(
+                                isSelected
+                                    ? .white
+                                    : .primary
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(
+                                        isSelected
+                                            ? Color.clear
+                                            : Color.inspectorCardBorder,
+                                        lineWidth: 1
+                                    )
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .shadow(
+                                color: isSelected
+                                    ? Color.accentColor.opacity(colorScheme == .dark ? 0.4 : 0.22)
+                                    : Color.clear,
+                                radius: 4,
+                                y: 2
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .id(tab.id)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
+            .background(Color.inspectorSecondaryBackground)
+        }
+    }
+
     // MARK: - Subviews
 
     private var headerSummaryView: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             MethodBadgeView(method: transaction.request.rawMethod)
             StatusBadgeView(statusCode: transaction.response?.statusCode, isPending: transaction.status == .pending)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(transaction.request.host)
                     .font(.caption.bold())
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                 Text(transaction.request.path)
-                    .font(.subheadline.bold())
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.primary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            Spacer()
+            Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(transaction.formattedDuration)
                     .font(.caption.bold().monospaced())
+                    .foregroundColor(.primary)
                 Text(transaction.formattedResponseSize)
                     .font(.caption2.monospaced())
                     .foregroundColor(.secondary)
             }
         }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(Color.inspectorSecondaryBackground)
     }
 
@@ -258,10 +409,15 @@ public struct RequestDetailView: View {
                     ScrollView(.horizontal, showsIndicators: true) {
                         Text(singleLineLive)
                             .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.primary)
                             .padding(12)
                             .textSelection(.enabled)
                     }
-                    .background(Color.inspectorCardBackground)
+                    .background(Color.inspectorCodeBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.inspectorCardBorder, lineWidth: 1)
+                    )
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
 
@@ -282,10 +438,15 @@ public struct RequestDetailView: View {
                     ScrollView(.horizontal, showsIndicators: true) {
                         Text(liveCurlCommand)
                             .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.primary)
                             .padding(12)
                             .textSelection(.enabled)
                     }
-                    .background(Color.inspectorCardBackground)
+                    .background(Color.inspectorCodeBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.inspectorCardBorder, lineWidth: 1)
+                    )
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
 
@@ -296,8 +457,12 @@ public struct RequestDetailView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                .padding(8)
-                .background(Color.blue.opacity(0.1))
+                .padding(10)
+                .background(Color.blue.opacity(colorScheme == .dark ? 0.15 : 0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
                 HStack(spacing: 6) {
@@ -330,7 +495,7 @@ public struct RequestDetailView: View {
                             .font(.caption.bold())
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(Color.gray.opacity(0.3))
+                            .background(Color.inspectorMutedFill)
                             .foregroundColor(.primary)
                             .clipShape(Capsule())
                         }
@@ -339,10 +504,15 @@ public struct RequestDetailView: View {
                     ScrollView(.horizontal, showsIndicators: true) {
                         Text(singleLineMasked)
                             .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.primary)
                             .padding(12)
                             .textSelection(.enabled)
                     }
-                    .background(Color.inspectorCardBackground)
+                    .background(Color.inspectorCodeBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.inspectorCardBorder, lineWidth: 1)
+                    )
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
 
@@ -363,16 +533,25 @@ public struct RequestDetailView: View {
                     ScrollView(.horizontal, showsIndicators: true) {
                         Text(maskedCurlCommand)
                             .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.primary)
                             .padding(12)
                             .textSelection(.enabled)
                     }
-                    .background(Color.inspectorCardBackground)
+                    .background(Color.inspectorCodeBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.inspectorCardBorder, lineWidth: 1)
+                    )
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             }
         }
-        .padding()
+        .padding(14)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -408,6 +587,10 @@ public struct RequestDetailView: View {
                     }
                     .padding(10)
                     .background(Color.inspectorCardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.inspectorCardBorder, lineWidth: 1)
+                    )
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             } else {
@@ -416,8 +599,12 @@ public struct RequestDetailView: View {
                     .foregroundColor(.secondary)
             }
         }
-        .padding()
+        .padding(14)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -432,25 +619,30 @@ public struct RequestDetailView: View {
         }
         .padding(14)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
     private func infoRow(title: String, value: String, allowCopy: Bool = false) -> some View {
-        HStack(alignment: .top) {
+        HStack(alignment: .top, spacing: 10) {
             Text(title)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.secondary)
-                .frame(width: 110, alignment: .leading)
+                .frame(width: 105, alignment: .leading)
             Text(value)
                 .font(.system(size: 13, design: .monospaced))
                 .foregroundColor(.primary)
                 .textSelection(.enabled)
-            Spacer()
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
             if allowCopy {
                 CopyButton(textToCopy: value)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
     }
 
     private func metricTimingRow(title: String, duration: TimeInterval?) -> some View {

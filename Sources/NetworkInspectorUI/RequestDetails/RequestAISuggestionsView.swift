@@ -5,6 +5,7 @@ import NetworkInspectorAnalytics
 public struct RequestAISuggestionsView: View {
     public let transaction: NetworkTransaction
     public var onShareToTeams: (() -> Void)? = nil
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var selectedMistakeId: UUID? = nil
     @State private var copiedTextNotice: String? = nil
@@ -44,16 +45,20 @@ public struct RequestAISuggestionsView: View {
                 Button {
                     shareAction()
                 } label: {
-                    HStack {
+                    HStack(spacing: 8) {
                         Image(systemName: "paperplane.fill")
                         Text("Share AI Suggestions to Teams")
                     }
                     .font(.subheadline.bold())
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.purple.opacity(0.15))
-                    .foregroundColor(.purple)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(.vertical, 14)
+                    .background(Color.purple.opacity(colorScheme == .dark ? 0.25 : 0.12))
+                    .foregroundColor(colorScheme == .dark ? Color(red: 0.85, green: 0.6, blue: 1.0) : .purple)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.purple.opacity(0.3), lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
         }
@@ -66,7 +71,7 @@ public struct RequestAISuggestionsView: View {
             // Circular Score Gauge
             ZStack {
                 Circle()
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 8)
+                    .stroke(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.08), lineWidth: 8)
                     .frame(width: 76, height: 76)
 
                 Circle()
@@ -97,7 +102,7 @@ public struct RequestAISuggestionsView: View {
                         .font(.caption.bold())
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
-                        .background(scoreColor.opacity(0.15))
+                        .background(scoreColor.opacity(colorScheme == .dark ? 0.25 : 0.15))
                         .foregroundColor(scoreColor)
                         .clipShape(Capsule())
                 }
@@ -105,6 +110,7 @@ public struct RequestAISuggestionsView: View {
                 Text(report.statusSummary)
                     .font(.subheadline.bold())
                     .foregroundColor(scoreColor)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Text(report.summary)
                     .font(.caption)
@@ -114,11 +120,15 @@ public struct RequestAISuggestionsView: View {
         }
         .padding(14)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
     private var mistakesSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Spotted Mistakes & Violations")
                     .font(.headline)
@@ -135,16 +145,17 @@ public struct RequestAISuggestionsView: View {
                             .font(.system(size: 18))
 
                         VStack(alignment: .leading, spacing: 2) {
-                            HStack {
+                            HStack(alignment: .top) {
                                 Text(mistake.title)
                                     .font(.system(size: 14, weight: .bold))
                                     .foregroundColor(.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
                                 Spacer()
                                 Text(mistake.severity.rawValue.uppercased())
                                     .font(.system(size: 9, weight: .heavy))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(severityBadgeColor(mistake.severity).opacity(0.15))
+                                    .background(severityBadgeColor(mistake.severity).opacity(colorScheme == .dark ? 0.25 : 0.15))
                                     .foregroundColor(severityBadgeColor(mistake.severity))
                                     .clipShape(Capsule())
                             }
@@ -159,24 +170,32 @@ public struct RequestAISuggestionsView: View {
 
                     Text(mistake.explanation)
                         .font(.system(size: 12))
-                        .foregroundColor(.primary.opacity(0.85))
+                        .foregroundColor(.primary.opacity(0.9))
                         .fixedSize(horizontal: false, vertical: true)
 
                     if let current = mistake.currentValue, !current.isEmpty {
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: 3) {
                             Text("Current Issue:")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(.red)
-                            Text(current)
-                                .font(.system(size: 11, design: .monospaced))
-                                .padding(6)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.red.opacity(0.08))
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                Text(current)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.red)
+                                    .textSelection(.enabled)
+                            }
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.red.opacity(colorScheme == .dark ? 0.15 : 0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.red.opacity(colorScheme == .dark ? 0.3 : 0.2), lineWidth: 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 3) {
                         HStack {
                             Text("Recommended Fix:")
                                 .font(.system(size: 10, weight: .bold))
@@ -186,19 +205,34 @@ public struct RequestAISuggestionsView: View {
                         }
                         Text(mistake.suggestedFix)
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .padding(6)
+                            .foregroundColor(colorScheme == .dark ? Color(red: 0.6, green: 0.95, blue: 0.6) : Color(red: 0.1, green: 0.55, blue: 0.1))
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(8)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.green.opacity(0.08))
+                            .background(Color.green.opacity(colorScheme == .dark ? 0.15 : 0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.green.opacity(colorScheme == .dark ? 0.3 : 0.2), lineWidth: 1)
+                            )
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                 }
                 .padding(12)
                 .background(Color.inspectorCardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.inspectorCardBorder, lineWidth: 1)
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
         }
         .padding(14)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -215,11 +249,16 @@ public struct RequestAISuggestionsView: View {
                 Text("This API transaction follows REST naming conventions, proper HTTP status semantics, and security headers.")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -239,33 +278,42 @@ public struct RequestAISuggestionsView: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                HStack {
+                HStack(alignment: .top) {
                     Text(req.method)
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.blue.opacity(0.15))
+                        .background(Color.blue.opacity(colorScheme == .dark ? 0.25 : 0.15))
                         .foregroundColor(.blue)
                         .clipShape(Capsule())
 
                     Text(req.url)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.primary)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 ScrollView(.horizontal, showsIndicators: true) {
                     Text(req.curl)
                         .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.primary)
                         .padding(10)
                         .textSelection(.enabled)
                 }
-                .background(Color.inspectorCardBackground)
+                .background(Color.inspectorCodeBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.inspectorCardBorder, lineWidth: 1)
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
         .padding(14)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -291,7 +339,7 @@ public struct RequestAISuggestionsView: View {
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background((res.statusCode < 400 ? Color.green : Color.orange).opacity(0.15))
+                    .background((res.statusCode < 400 ? Color.green : Color.orange).opacity(colorScheme == .dark ? 0.25 : 0.15))
                     .foregroundColor(res.statusCode < 400 ? .green : .orange)
                     .clipShape(Capsule())
             }
@@ -300,10 +348,15 @@ public struct RequestAISuggestionsView: View {
                 ScrollView(.horizontal, showsIndicators: true) {
                     Text(body)
                         .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.primary)
                         .padding(10)
                         .textSelection(.enabled)
                 }
-                .background(Color.inspectorCardBackground)
+                .background(Color.inspectorCodeBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.inspectorCardBorder, lineWidth: 1)
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             } else {
                 Text("(Empty body recommended by standard)")
@@ -313,6 +366,10 @@ public struct RequestAISuggestionsView: View {
         }
         .padding(14)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -331,21 +388,31 @@ public struct RequestAISuggestionsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(check.title)
                                 .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.primary)
                             Text(check.notes)
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
 
                         Spacer()
                     }
-                    .padding(8)
+                    .padding(10)
                     .background(Color.inspectorCardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.inspectorCardBorder, lineWidth: 1)
+                    )
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
         }
         .padding(14)
         .background(Color.inspectorSecondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -372,4 +439,3 @@ public struct RequestAISuggestionsView: View {
         }
     }
 }
-

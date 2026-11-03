@@ -57,7 +57,7 @@ public struct MetricCardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
         )
     }
 }
@@ -74,11 +74,16 @@ public struct SyntaxHighlightedJSONView: View {
             ScrollView(.vertical, showsIndicators: true) {
                 Text(highlightedAttributedString)
                     .font(.system(size: 13, weight: .regular, design: .monospaced))
+                    .foregroundColor(.primary)
                     .textSelection(.enabled)
                     .padding(12)
             }
         }
-        .background(Color.inspectorCardBackground)
+        .background(Color.inspectorCodeBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.inspectorCardBorder, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
