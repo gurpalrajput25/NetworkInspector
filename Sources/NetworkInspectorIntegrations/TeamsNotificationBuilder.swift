@@ -195,10 +195,31 @@ public enum TeamsNotificationBuilder {
         let curlTitle = maskTokens ? "📡 cURL (Masked)" : "📡 cURL (Live Token - Ready for Postman)"
         let curlSubtitle = maskTokens
             ? "Sensitive tokens are masked for security."
-            : "⚡️ Contains active unmasked token. Click 'Copy' on the code block to import directly into Postman or Terminal."
+            : "⚡️ Contains active unmasked token. Click 'Copy code' on the 1-Line box below for 1-click Postman import."
 
-        let multiLineCode = "```bash\n\(multiLineCurl)\n```"
-        let singleLineCode = "```bash\n\(singleLineCurl)\n```"
+        let singleLineCodeBlock: [String: Any] = [
+            "type": "CodeBlock",
+            "language": "bash",
+            "codeSnippet": singleLineCurl,
+            "fallback": [
+                "type": "TextBlock",
+                "text": "```\n\(singleLineCurl)\n```",
+                "fontType": "Monospace",
+                "wrap": false
+            ]
+        ]
+
+        let multiLineCodeBlock: [String: Any] = [
+            "type": "CodeBlock",
+            "language": "bash",
+            "codeSnippet": multiLineCurl,
+            "fallback": [
+                "type": "TextBlock",
+                "text": "```\n\(multiLineCurl)\n```",
+                "fontType": "Monospace",
+                "wrap": false
+            ]
+        ]
 
         bodyItems.append([
             "type": "Container",
@@ -208,6 +229,7 @@ public enum TeamsNotificationBuilder {
                     "type": "TextBlock",
                     "text": curlTitle,
                     "weight": "Bolder",
+                    "size": "Medium",
                     "wrap": true
                 ],
                 [
@@ -219,28 +241,26 @@ public enum TeamsNotificationBuilder {
                 ],
                 [
                     "type": "TextBlock",
-                    "text": multiLineCode,
-                    "wrap": true
-                ],
-                [
-                    "type": "TextBlock",
-                    "text": "📋 1-Line cURL (Guaranteed 1-Click Import — no line breaks or shell escaping):",
+                    "text": "📋 **1-Line Postman cURL** (Direct 1-Click Import — zero line wraps or URL splits):",
                     "weight": "Bolder",
                     "spacing": "Small",
                     "wrap": true
                 ],
+                singleLineCodeBlock,
                 [
                     "type": "TextBlock",
-                    "text": singleLineCode,
+                    "text": "🔍 **Multi-Line cURL** (Formatted for terminal / code review):",
+                    "spacing": "Medium",
                     "wrap": true
-                ]
+                ],
+                multiLineCodeBlock
             ]
         ])
 
         // How to use in Postman
         let testInstructions = maskTokens
-            ? "• Copy the 1-Line cURL above\n• Replace [REDACTED] tokens with active credentials\n• Run in Terminal or Postman"
-            : "• Copy either cURL code box above\n• In Postman: File → Import → Raw text → Paste and Send\n• Tip: Use the 1-Line cURL if copying across devices to avoid accidental newline wrapping"
+            ? "• Click **Copy code** on the **1-Line cURL** box above\n• Replace [REDACTED] tokens with active credentials\n• In Postman: **Import** → **Raw text** → **Paste** (or paste directly into request URL bar)"
+            : "• Click **Copy code** on the **1-Line Postman cURL** box above\n• In Postman: **Import** → **Raw text** → **Paste** (or paste directly into request URL bar)\n• All HTTP method, headers, query params, and live tokens will be automatically populated!"
 
         bodyItems.append([
             "type": "Container",

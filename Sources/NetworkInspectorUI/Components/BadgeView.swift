@@ -1,5 +1,21 @@
 import SwiftUI
 import NetworkInspectorCore
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
+
+public enum InspectorPasteboard {
+    public static func copy(_ string: String) {
+        #if canImport(UIKit)
+        UIPasteboard.general.string = string
+        #elseif canImport(AppKit)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(string, forType: .string)
+        #endif
+    }
+}
 
 public struct StatusBadgeView: View {
     public let statusCode: Int?
@@ -82,9 +98,7 @@ public struct CopyButton: View {
 
     public var body: some View {
         Button {
-            #if canImport(UIKit)
-            UIPasteboard.general.string = textToCopy
-            #endif
+            InspectorPasteboard.copy(textToCopy)
             hasCopied = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 hasCopied = false

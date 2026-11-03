@@ -211,7 +211,7 @@ public struct RequestDetailView: View {
         let maskedCurlCommand = transaction.generateCurl(maskTokens: true, singleLine: false)
         let singleLineMasked = transaction.generateCurl(maskTokens: true, singleLine: true)
 
-        return VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: 16) {
             Picker("cURL Mode", selection: $isLiveCurlMode) {
                 Text("⚡️ Live Token (Postman)").tag(true)
                 Text("🛡 Masked").tag(false)
@@ -219,54 +219,71 @@ public struct RequestDetailView: View {
             .pickerStyle(.segmented)
 
             if isLiveCurlMode {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Live cURL Command")
-                            .font(.headline)
-                        Text("Directly importable into Postman with active authorization.")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    CopyButton(textToCopy: liveCurlCommand)
-                }
-
-                ScrollView(.horizontal, showsIndicators: true) {
-                    Text(liveCurlCommand)
-                        .font(.system(size: 12, design: .monospaced))
-                        .padding(12)
-                        .textSelection(.enabled)
-                }
-                .background(Color.inspectorCardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                HStack {
-                    Text("Need a single line without continuation backslashes?")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Button {
-                        #if canImport(UIKit)
-                        UIPasteboard.general.string = singleLineLive
-                        #endif
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "bolt.fill")
-                            Text("Copy 1-Line cURL")
+                // Postman 1-Line (Primary)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Postman 1-Line cURL")
+                                .font(.headline)
+                            Text("Direct 1-click import into Postman with live unmasked token.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
                         }
-                        .font(.caption.bold())
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.accentColor)
-                        .foregroundColor(.white)
-                        .clipShape(Capsule())
+                        Spacer()
+                        Button {
+                            InspectorPasteboard.copy(singleLineLive)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "bolt.fill")
+                                Text("Copy 1-Line Postman")
+                            }
+                            .font(.caption.bold())
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.accentColor)
+                            .foregroundColor(.white)
+                            .clipShape(Capsule())
+                        }
                     }
+
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        Text(singleLineLive)
+                            .font(.system(size: 12, design: .monospaced))
+                            .padding(12)
+                            .textSelection(.enabled)
+                    }
+                    .background(Color.inspectorCardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+
+                // Multi-Line Formatted
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Multi-Line cURL")
+                                .font(.subheadline.bold())
+                            Text("Formatted with line breaks for Terminal execution.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        CopyButton(textToCopy: liveCurlCommand)
+                    }
+
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        Text(liveCurlCommand)
+                            .font(.system(size: 12, design: .monospaced))
+                            .padding(12)
+                            .textSelection(.enabled)
+                    }
+                    .background(Color.inspectorCardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
 
                 HStack(spacing: 8) {
                     Image(systemName: "info.circle.fill")
                         .foregroundColor(.blue)
-                    Text("In Postman: Click Import → Raw text → Paste to run request immediately.")
+                    Text("In Postman: Click Import → Raw text → Paste (or paste directly in request URL bar).")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -283,45 +300,65 @@ public struct RequestDetailView: View {
                         .foregroundColor(.orange)
                 }
             } else {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Masked cURL Command")
-                            .font(.headline)
-                        Text("Tokens masked for safe developer sharing and bug reports.")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    CopyButton(textToCopy: maskedCurlCommand)
-                }
-
-                ScrollView(.horizontal, showsIndicators: true) {
-                    Text(maskedCurlCommand)
-                        .font(.system(size: 12, design: .monospaced))
-                        .padding(12)
-                        .textSelection(.enabled)
-                }
-                .background(Color.inspectorCardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                HStack {
-                    Spacer()
-                    Button {
-                        #if canImport(UIKit)
-                        UIPasteboard.general.string = singleLineMasked
-                        #endif
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "doc.on.doc")
-                            Text("Copy 1-Line Masked")
+                // Masked 1-Line
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Masked 1-Line cURL")
+                                .font(.headline)
+                            Text("Tokens masked for safe developer sharing.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
                         }
-                        .font(.caption.bold())
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.gray.opacity(0.3))
-                        .foregroundColor(.primary)
-                        .clipShape(Capsule())
+                        Spacer()
+                        Button {
+                            InspectorPasteboard.copy(singleLineMasked)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "doc.on.doc")
+                                Text("Copy 1-Line Masked")
+                            }
+                            .font(.caption.bold())
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.gray.opacity(0.3))
+                            .foregroundColor(.primary)
+                            .clipShape(Capsule())
+                        }
                     }
+
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        Text(singleLineMasked)
+                            .font(.system(size: 12, design: .monospaced))
+                            .padding(12)
+                            .textSelection(.enabled)
+                    }
+                    .background(Color.inspectorCardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+
+                // Masked Multi-Line
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Masked Multi-Line cURL")
+                                .font(.subheadline.bold())
+                            Text("Formatted for bug reports and inspection.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        CopyButton(textToCopy: maskedCurlCommand)
+                    }
+
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        Text(maskedCurlCommand)
+                            .font(.system(size: 12, design: .monospaced))
+                            .padding(12)
+                            .textSelection(.enabled)
+                    }
+                    .background(Color.inspectorCardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             }
         }

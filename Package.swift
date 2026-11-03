@@ -107,6 +107,10 @@ let package = Package(
         .testTarget(
             name: "NetworkInspectorCaptureTests",
             dependencies: ["NetworkInspectorURLSession", "NetworkInspectorCore", "NetworkInspectorStorage"]
+        ),
+        .testTarget(
+            name: "NetworkInspectorIntegrationsTests",
+            dependencies: ["NetworkInspectorIntegrations", "NetworkInspectorCore", "NetworkInspectorPrivacy"]
         )
     ]
 )
