@@ -16,6 +16,12 @@ public struct TeamsShareView: View {
     @State private var planeOffset: CGFloat = 0
     @State private var pulseGlow = false
 
+    @AppStorage("network_inspector_postman_api_key") private var postmanApiKey: String = ""
+    @AppStorage("network_inspector_postman_collection_uid") private var postmanCollectionUid: String = ""
+    @AppStorage("network_inspector_postman_workspace_id") private var postmanWorkspaceId: String = ""
+    @State private var enablePostmanSync: Bool = true
+    @State private var generatedPostmanDeepLink: String? = nil
+
     public init(transaction: NetworkTransaction) {
         self.transaction = transaction
     }
@@ -47,6 +53,9 @@ public struct TeamsShareView: View {
 
                     // ⚡️ Live Token (Postman Ready) Toggle
                     liveTokenCard
+
+                    // 🚀 Postman Cloud 1-Click Sync Card
+                    postmanSyncCard
 
                     // 📱 Device Diagnostics Card
                     deviceDiagnosticsCard
@@ -92,6 +101,11 @@ public struct TeamsShareView: View {
         .onAppear {
             if let saved = TeamsIntegration.shared.webhookURL?.absoluteString {
                 webhookURLString = saved
+            }
+            if let p = TeamsIntegration.shared.postmanService {
+                if postmanApiKey.isEmpty { postmanApiKey = p.apiKey }
+                if postmanCollectionUid.isEmpty { postmanCollectionUid = p.collectionUid }
+                if postmanWorkspaceId.isEmpty { postmanWorkspaceId = p.workspaceId }
             }
             withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
                 pulseGlow = true
@@ -246,6 +260,63 @@ public struct TeamsShareView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
+    private var postmanSyncCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle(isOn: $enablePostmanSync) {
+                HStack(spacing: 10) {
+                    Image(systemName: "paperplane.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(enablePostmanSync ? .orange : .secondary)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Postman Cloud 1-Click Sync")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Pushes request directly to QA Postman collection and embeds a '🚀 Open in Postman' button in Teams.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            if enablePostmanSync {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Postman API Key (PMAK-...)")
+                        .font(.caption2.bold())
+                        .foregroundColor(.secondary)
+                    SecureField("PMAK-...", text: $postmanApiKey)
+                        .font(.system(size: 12, design: .monospaced))
+                        .padding(8)
+                        .background(Color.inspectorCardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                    Text("Target Collection UID (<workspace_id>-<collection_uuid>)")
+                        .font(.caption2.bold())
+                        .foregroundColor(.secondary)
+                    TextField("12345678-abcd-ef01-...", text: $postmanCollectionUid)
+                        .font(.system(size: 12, design: .monospaced))
+                        .padding(8)
+                        .background(Color.inspectorCardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .autocorrectionDisabled()
+
+                    Text("Workspace ID")
+                        .font(.caption2.bold())
+                        .foregroundColor(.secondary)
+                    TextField("12345678-...", text: $postmanWorkspaceId)
+                        .font(.system(size: 12, design: .monospaced))
+                        .padding(8)
+                        .background(Color.inspectorCardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .autocorrectionDisabled()
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(12)
+        .background(Color.inspectorSecondaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
     private var deviceDiagnosticsCard: some View {
         HStack(spacing: 12) {
             Image(systemName: "iphone.gen3")
@@ -361,11 +432,29 @@ public struct TeamsShareView: View {
                     .font(.title2.bold())
                     .foregroundColor(.white)
 
-                Text("Diagnostic trace, user profile, and cURL were delivered.")
+                Text(generatedPostmanDeepLink != nil
+                    ? "Diagnostic trace and cURL were delivered with a 1-click '🚀 Open in Postman' button."
+                    : "Diagnostic trace, user profile, and cURL were delivered.")
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
+
+                if let deepLink = generatedPostmanDeepLink, let url = URL(string: deepLink) {
+                    Link(destination: url) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.up.right.square.fill")
+                            Text("Open in Postman")
+                        }
+                        .font(.headline)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 10)
+                        .background(Color.orange)
+                        .foregroundColor(.white)
+                        .clipShape(Capsule())
+                    }
+                    .padding(.top, 4)
+                }
 
                 Button {
                     withAnimation {
@@ -408,17 +497,27 @@ public struct TeamsShareView: View {
             planeOffset = 15
         }
 
+        if enablePostmanSync && !postmanApiKey.isEmpty && !postmanCollectionUid.isEmpty && !postmanWorkspaceId.isEmpty {
+            TeamsIntegration.shared.configurePostman(
+                apiKey: postmanApiKey.trimmingCharacters(in: .whitespacesAndNewlines),
+                collectionUid: postmanCollectionUid.trimmingCharacters(in: .whitespacesAndNewlines),
+                workspaceId: postmanWorkspaceId.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        }
+
         TeamsIntegration.shared.send(
             transaction: transaction,
             developerNote: developerNote.isEmpty ? nil : developerNote,
             customWebhookURL: url,
             customUser: userDetails,
-            maskTokens: !includeLiveToken
+            maskTokens: !includeLiveToken,
+            syncToPostman: enablePostmanSync && !postmanApiKey.isEmpty
         ) { result in
             isSending = false
             planeOffset = 0
             switch result {
-            case .success:
+            case .success(let deepLink):
+                generatedPostmanDeepLink = deepLink
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                     showSuccessOverlay = true
                 }

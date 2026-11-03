@@ -44,6 +44,17 @@ public final class NetworkInspectorManager: @unchecked Sendable {
             )
         }
 
+        // Configure Postman Cloud Service
+        if let apiKey = configuration.postmanAPIKey,
+           let collectionUid = configuration.postmanCollectionUID,
+           let workspaceId = configuration.postmanWorkspaceID {
+            TeamsIntegration.shared.configurePostman(
+                apiKey: apiKey,
+                collectionUid: collectionUid,
+                workspaceId: workspaceId
+            )
+        }
+
         // Register default URLSession capture
         URLSessionCaptureAdapter.shared.enableDefaultSessionCapture()
 

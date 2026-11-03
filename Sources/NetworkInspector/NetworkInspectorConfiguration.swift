@@ -14,6 +14,9 @@ public struct NetworkInspectorConfiguration: Sendable {
     public var environmentName: String
     public var privacy: NetworkPrivacyConfiguration
     public var teamsWebhookURL: URL?
+    public var postmanAPIKey: String?
+    public var postmanCollectionUID: String?
+    public var postmanWorkspaceID: String?
     public var isShakeToOpenEnabled: Bool
 
     public static let development = NetworkInspectorConfiguration(
@@ -77,6 +80,9 @@ public struct NetworkInspectorConfiguration: Sendable {
         environmentName: String = "Development",
         privacy: NetworkPrivacyConfiguration = .default,
         teamsWebhookURL: URL? = nil,
+        postmanAPIKey: String? = nil,
+        postmanCollectionUID: String? = nil,
+        postmanWorkspaceID: String? = nil,
         isShakeToOpenEnabled: Bool = true
     ) {
         self.isEnabled = isEnabled
@@ -91,6 +97,9 @@ public struct NetworkInspectorConfiguration: Sendable {
         self.environmentName = environmentName
         self.privacy = privacy
         self.teamsWebhookURL = teamsWebhookURL
+        self.postmanAPIKey = postmanAPIKey
+        self.postmanCollectionUID = postmanCollectionUID
+        self.postmanWorkspaceID = postmanWorkspaceID
         self.isShakeToOpenEnabled = isShakeToOpenEnabled
     }
 }

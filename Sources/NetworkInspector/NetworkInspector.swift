@@ -5,6 +5,7 @@ import UIKit
 #endif
 import NetworkInspectorCore
 import NetworkInspectorStorage
+import NetworkInspectorIntegrations
 import NetworkInspectorURLSession
 import NetworkInspectorUI
 
@@ -93,6 +94,16 @@ public enum NetworkInspector {
     /// Clears the currently logged-in user upon logout.
     public static func clearCurrentUser() {
         NetworkLogStore.shared.clearCurrentUser()
+    }
+
+    /// Configures Microsoft Teams incoming webhook integration.
+    public static func configureTeams(webhookURL: URL, environmentName: String = "Development") {
+        TeamsIntegration.shared.configure(webhookURL: webhookURL, environmentName: environmentName)
+    }
+
+    /// Configures Postman Cloud synchronization for 1-click execution (`🚀 Open in Postman` button).
+    public static func configurePostman(apiKey: String, collectionUid: String, workspaceId: String) {
+        TeamsIntegration.shared.configurePostman(apiKey: apiKey, collectionUid: collectionUid, workspaceId: workspaceId)
     }
 }
 

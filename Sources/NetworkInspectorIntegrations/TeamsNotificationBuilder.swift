@@ -6,6 +6,7 @@ public enum TeamsNotificationBuilder {
 
     public static func buildAdaptiveCard(
         transaction: NetworkTransaction,
+        postmanDeepLink: String? = nil,
         developerNote: String? = nil,
         environmentName: String = "Development",
         customUser: JWTUserDetails? = nil,
@@ -364,14 +365,52 @@ public enum TeamsNotificationBuilder {
             ]
         ])
 
-        let card: [String: Any] = [
+        var card: [String: Any] = [
             "type": "AdaptiveCard",
             "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
             "version": "1.5",
             "body": bodyItems
         ]
 
+        if let link = postmanDeepLink, !link.isEmpty {
+            card["actions"] = [
+                [
+                    "type": "Action.OpenUrl",
+                    "title": "🚀 Open in Postman",
+                    "url": link
+                ]
+            ]
+        }
+
         return card
+    }
+
+    /// Wraps the Adaptive Card in a Teams Webhook message envelope.
+    public static func buildMessagePayload(
+        transaction: NetworkTransaction,
+        postmanDeepLink: String? = nil,
+        developerNote: String? = nil,
+        environmentName: String = "Development",
+        customUser: JWTUserDetails? = nil,
+        maskTokens: Bool = false
+    ) -> [String: Any] {
+        let card = buildAdaptiveCard(
+            transaction: transaction,
+            postmanDeepLink: postmanDeepLink,
+            developerNote: developerNote,
+            environmentName: environmentName,
+            customUser: customUser,
+            maskTokens: maskTokens
+        )
+        return [
+            "type": "message",
+            "attachments": [
+                [
+                    "contentType": "application/vnd.microsoft.card.adaptive",
+                    "content": card
+                ]
+            ]
+        ]
     }
 
     private static func formatJSONString(_ string: String, maxCount: Int = 1800) -> String? {
