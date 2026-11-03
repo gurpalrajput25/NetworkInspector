@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NetworkInspector • Postman & cURL Bridge</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --text: #f0f6fc;
+      --text-muted: #8b949e;
+      --accent: #ff6c37;
+      --accent-hover: #ff8559;
+      --success: #238636;
+      --success-text: #3fb950;
+      --code-bg: #090d13;
+      --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f6f8fa;
+        --card-bg: #ffffff;
+        --border: #d0d7de;
+        --text: #1f2328;
+        --text-muted: #656d76;
+        --accent: #ef5b25;
+        --accent-hover: #fa7241;
+        --success: #1a7f37;
+        --success-text: #1a7f37;
+        --code-bg: #f6f8fa;
+      }
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px;
+      line-height: 1.5;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 820px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.25);
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo-badge {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #ff6c37, #ff9068);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 24px;
+      flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(255, 108, 55, 0.4);
+    }
+
+    .header-text h1 {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .header-text p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .status-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 18px;
+      border-radius: 10px;
+      background: rgba(35, 134, 54, 0.15);
+      border: 1px solid rgba(63, 185, 80, 0.4);
+      color: var(--success-text);
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      transition: all 0.2s ease;
+    }
+
+    .actions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.15s ease;
+      border: none;
+      outline: none;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+      box-shadow: 0 4px 14px rgba(255, 108, 55, 0.35);
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+
+    .btn-secondary {
+      background: #238636;
+      color: white;
+      box-shadow: 0 4px 14px rgba(35, 134, 54, 0.35);
+    }
+    .btn-secondary:hover { background: #2ea043; }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-outline:hover {
+      background: rgba(255,255,255,0.06);
+    }
+
+    .section-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .code-wrapper {
+      position: relative;
+      margin-bottom: 24px;
+    }
+
+    .code-area {
+      width: 100%;
+      height: 200px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      background: var(--code-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      resize: vertical;
+      white-space: pre;
+      line-height: 1.45;
+      outline: none;
+    }
+    .code-area:focus {
+      border-color: var(--accent);
+    }
+
+    .guide-box {
+      background: rgba(255, 108, 55, 0.08);
+      border: 1px dashed var(--accent);
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 13px;
+    }
+
+    .guide-box h4 {
+      font-size: 14px;
+      color: var(--accent);
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    .guide-box ol {
+      margin-left: 20px;
+      color: var(--text);
+    }
+    .guide-box li {
+      margin-bottom: 6px;
+    }
+
+    .footer {
+      margin-top: 24px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .footer a { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="header">
+      <div class="logo-badge">🚀</div>
+      <div class="header-text">
+        <h1>NetworkInspector • Postman 1-Click Import</h1>
+        <p>Instant clipboard sync & Postman desktop launcher</p>
+      </div>
+    </div>
+
+    <div id="statusBanner" class="status-banner">
+      <span id="statusIcon">⏳</span>
+      <span id="statusText">Processing intercepted request...</span>
+    </div>
+
+    <div class="actions-grid">
+      <button id="copyBtn" class="btn btn-secondary" onclick="copyCurlToClipboard()">
+        📋 Copy cURL to Clipboard
+      </button>
+      <button id="launchBtn" class="btn btn-primary" onclick="launchPostman()">
+        🚀 Open Postman App
+      </button>
+      <button id="downloadBtn" class="btn btn-outline" onclick="downloadPostmanCollection()">
+        📥 Download Collection (.json)
+      </button>
+    </div>
+
+    <div class="section-title">
+      <span>Command (Live Active Bearer Token)</span>
+      <span style="font-size: 11px; text-transform: none; color: var(--text-muted);">Click box to select all</span>
+    </div>
+
+    <div class="code-wrapper">
+      <textarea id="curlTextArea" class="code-area" readonly spellcheck="false" onclick="this.select()"></textarea>
+    </div>
+
+    <div class="guide-box">
+      <h4>⚡️ Instant Execution in Postman (2 Seconds):</h4>
+      <ol>
+        <li>The cURL command has already been <strong>automatically copied to your clipboard</strong>.</li>
+        <li>Switch to the <strong>Postman app</strong>.</li>
+        <li>Click into the top <strong>URL Address Bar</strong> (or click <strong>Import → Raw text</strong>) and press <strong>Cmd+V</strong> (or <strong>Ctrl+V</strong>).</li>
+        <li>Postman immediately populates the Method, URL, Query Parameters, Headers, and Token. Just click <strong>Send</strong>!</li>
+      </ol>
+    </div>
+
+    <div class="footer">
+      Powered by <a href="https://github.com/gurpalrajput25/NetworkInspector" target="_blank">NetworkInspector iOS SDK</a> • 100% Client-Side Privacy (Data never leaves your browser)
+    </div>
+  </div>
+
+  <script>
+    let activeCurl = "";
+    let requestMeta = {
+      method: "GET",
+      url: "",
+      headers: {},
+      body: ""
+    };
+
+    function parsePayload() {
+      const hash = window.location.hash.substring(1);
+      if (!hash) {
+        showStatus("⚠️ No request payload provided in link.", "info");
+        return;
+      }
+
+      // 1. Try JSON payload format (#data=...)
+      if (hash.startsWith("data=")) {
+        try {
+          const rawBase64 = hash.substring(5);
+          const jsonStr = decodeBase64Unicode(rawBase64);
+          const data = JSON.parse(jsonStr);
+          activeCurl = data.curl || "";
+          requestMeta.method = data.method || "GET";
+          requestMeta.url = data.url || "";
+          requestMeta.headers = data.headers || {};
+          requestMeta.body = data.body || "";
+        } catch (e) {
+          console.error("JSON payload decode error:", e);
+        }
+      }
+
+      // 2. Fallback to raw encoded cURL (#curl=...)
+      if (!activeCurl && hash.startsWith("curl=")) {
+        activeCurl = decodeURIComponent(hash.substring(5));
+      } else if (!activeCurl) {
+        activeCurl = decodeURIComponent(hash);
+      }
+
+      document.getElementById("curlTextArea").value = activeCurl;
+
+      // Automatically copy to clipboard and attempt to launch Postman
+      if (activeCurl) {
+        copyCurlToClipboard(true);
+      } else {
+        showStatus("⚠️ Invalid or empty cURL string.", "info");
+      }
+    }
+
+    function decodeBase64Unicode(str) {
+      // Normalize URL-safe base64
+      let base64 = str.replace(/-/g, "+").replace(/_/g, "/");
+      while (base64.length % 4) {
+        base64 += "=";
+      }
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return new TextDecoder().decode(bytes);
+    }
+
+    function showStatus(message, type) {
+      const banner = document.getElementById("statusBanner");
+      const icon = document.getElementById("statusIcon");
+      const text = document.getElementById("statusText");
+
+      text.textContent = message;
+      if (type === "success") {
+        icon.textContent = "✅";
+        banner.style.background = "rgba(35, 134, 54, 0.15)";
+        banner.style.borderColor = "rgba(63, 185, 80, 0.5)";
+        banner.style.color = "var(--success-text)";
+      } else {
+        icon.textContent = "ℹ️";
+        banner.style.background = "rgba(255, 108, 55, 0.1)";
+        banner.style.borderColor = "var(--accent)";
+        banner.style.color = "var(--accent)";
+      }
+    }
+
+    function copyCurlToClipboard(autoLaunch = false) {
+      const text = activeCurl || document.getElementById("curlTextArea").value;
+      if (!text) return;
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          showStatus("✅ cURL automatically copied to clipboard! Paste into Postman.", "success");
+          if (autoLaunch) {
+            setTimeout(launchPostman, 400);
+          }
+        }).catch(() => {
+          manualCopyFallback(text, autoLaunch);
+        });
+      } else {
+        manualCopyFallback(text, autoLaunch);
+      }
+    }
+
+    function manualCopyFallback(text, autoLaunch) {
+      const ta = document.getElementById("curlTextArea");
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand("copy");
+        showStatus("✅ cURL copied to clipboard! Paste into Postman.", "success");
+      } catch (e) {
+        showStatus("👉 Press Cmd+C (Ctrl+C) to copy cURL.", "info");
+      }
+      if (autoLaunch) {
+        setTimeout(launchPostman, 400);
+      }
+    }
+
+    function launchPostman() {
+      // Trigger Postman Desktop via registered OS protocol handler
+      window.location.href = "postman://";
+    }
+
+    function downloadPostmanCollection() {
+      let targetUrl = requestMeta.url;
+      let method = requestMeta.method || "GET";
+      let headersList = [];
+
+      for (let [k, v] of Object.entries(requestMeta.headers)) {
+        headersList.push({ key: k, value: v });
+      }
+
+      // If URL wasn't provided in JSON, attempt simple regex from cURL
+      if (!targetUrl && activeCurl) {
+        const urlMatch = activeCurl.match(/curl\s+(?:--location\s+)?(?:-X\s+[A-Z]+\s+)?'([^']+)'/) || activeCurl.match(/curl\s+[^\s]+\s+"([^"]+)"/);
+        if (urlMatch) targetUrl = urlMatch[1];
+      }
+
+      const collection = {
+        info: {
+          name: "NetworkInspector Import",
+          schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+        },
+        item: [
+          {
+            name: `[${method}] ${targetUrl.split("?")[0].split("/").slice(-2).join("/") || targetUrl}`,
+            request: {
+              method: method,
+              header: headersList,
+              body: requestMeta.body ? {
+                mode: "raw",
+                raw: requestMeta.body,
+                options: { raw: { language: "json" } }
+              } : undefined,
+              url: targetUrl || "https://example.com"
+            }
+          }
+        ]
+      };
+
+      const blob = new Blob([JSON.stringify(collection, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "NetworkInspector_Request.postman_collection.json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showStatus("📥 Downloaded Postman Collection JSON! Double-click to import into Postman.", "success");
+    }
+
+    window.addEventListener("DOMContentLoaded", parsePayload);
+  </script>
+</body>
+</html>

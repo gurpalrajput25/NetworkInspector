@@ -79,17 +79,21 @@ public final class TeamsIntegration: @unchecked Sendable {
                 }
             }
         } else {
+            let universalLink = PostmanLinkBuilder.buildImportLink(
+                curlString: CurlFormatter.format(transaction: transaction, maskTokens: maskTokens),
+                transaction: transaction
+            )
             dispatchToTeams(
                 transaction: transaction,
                 targetURL: targetURL,
-                postmanDeepLink: nil,
+                postmanDeepLink: universalLink,
                 developerNote: developerNote,
                 customUser: customUser,
                 maskTokens: maskTokens
             ) { teamsResult in
                 switch teamsResult {
                 case .success:
-                    completion(.success(nil))
+                    completion(.success(universalLink))
                 case .failure(let error):
                     completion(.failure(error))
                 }

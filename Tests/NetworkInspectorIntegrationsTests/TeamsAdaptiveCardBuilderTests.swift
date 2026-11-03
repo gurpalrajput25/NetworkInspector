@@ -99,7 +99,13 @@ final class TeamsAdaptiveCardBuilderTests: XCTestCase {
             return
         }
 
-        XCTAssertTrue(actions.isEmpty, "Actions should be empty when postmanDeepLink is nil")
+        // Even without an explicit Postman Cloud deep link, the card embeds the universal web import bridge
+        XCTAssertFalse(actions.isEmpty, "Actions must include the universal 1-click Postman open link when postmanDeepLink is nil")
+        let firstAction = actions.first
+        XCTAssertEqual(firstAction?["type"] as? String, "Action.OpenUrl")
+        XCTAssertEqual(firstAction?["title"] as? String, "🚀 Open in Postman")
+        let url = firstAction?["url"] as? String ?? ""
+        XCTAssertTrue(url.contains("import.html#data=") || url.contains("import.html#curl="))
     }
 
     func testAdaptiveCardWithAuthenticatedUserAndQueryOrg() {

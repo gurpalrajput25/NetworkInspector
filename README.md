@@ -359,11 +359,13 @@ When an issue occurs or an engineer shares a trace:
 
 ### Key Capabilities
 
+- **1-Click Postman & Web Bridge:** Teams cards feature a native `Action.OpenUrl` button titled **`🚀 Open in Postman`**. Clicking it launches Postman Desktop and automatically writes the unmasked cURL with live token to the user's OS clipboard via the client-side bridge (`docs/import.html`), with 100% data privacy.
+- **Teams In-Card Quick-Copy Field:** Solves Microsoft Teams' text selection and copy limitations. Teams cards embed an interactive `Input.Text` field alongside the monospaced code fence so developers can click inside and press `Cmd+A` / `Cmd+C` (or right-click → Copy) directly in Teams.
 - **Zero Hyperlink Injection:** Long URLs inside Teams are enclosed in a monospaced bleed container (`Container` style: `emphasis` with ```` ```bash ... ``` ````). This prevents Teams from injecting clickable blue hyperlinks or inserting visual line-break corruption when copying.
 - **POSIX-Compliant Line Continuations (`\`):** Headers are joined with ` \\\n` and indented with 2 spaces (`  -H '...'`). They execute flawlessly in Terminal/bash/zsh and import directly into Postman.
 - **HTTP/2 Clean-up:** Automatically filters out protocol pseudo-headers (`:method`, `:path`, `:authority`, `:scheme`) and transport headers (`connection`, `content-length`).
 - **Live Authenticated User Details:** Automatically extracts and displays the active session's User ID, Name, Email, Role, Organizer ID (from JWT claims or URL query parameters), and live Token Status.
-- **1-Click Native Action:** Native `Action.OpenUrl` titled **`🚀 Open in Postman`** launches the Postman desktop client directly to the newly pushed request.
+- **Direct Collection Download:** The web bridge provides an instant **`📥 Download Postman Collection (.json)`** button that dynamically generates a Postman Collection v2.1.0 file ready to import.
 
 ### Setup & Configuration
 

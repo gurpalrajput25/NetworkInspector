@@ -47,11 +47,22 @@ public struct TeamsAdaptiveCardBuilder {
     ) -> [String: Any] {
         var actions: [[String: Any]] = []
 
-        if let link = postmanDeepLink, !link.isEmpty {
+        let effectiveLink = (postmanDeepLink?.isEmpty == false)
+            ? postmanDeepLink!
+            : PostmanLinkBuilder.buildImportLink(curlString: curlString)
+
+        actions.append([
+            "type": "Action.OpenUrl",
+            "title": "🚀 Open in Postman",
+            "url": effectiveLink
+        ])
+
+        let helperLink = PostmanLinkBuilder.buildImportLink(curlString: curlString)
+        if effectiveLink != helperLink {
             actions.append([
                 "type": "Action.OpenUrl",
-                "title": "🚀 Open in Postman",
-                "url": link
+                "title": "📋 Copy cURL (Web)",
+                "url": helperLink
             ])
         }
 
@@ -60,7 +71,7 @@ public struct TeamsAdaptiveCardBuilder {
         let curlTitle = maskTokens ? "📡 cURL (Masked)" : "📡 cURL (Live Token - Ready for Postman)"
         let curlSubtitle = maskTokens
             ? "⚠️ Tokens are masked for security."
-            : "⚡ Active session token attached. Click below to load directly in Postman or copy from the monospace block."
+            : "⚡ Active session token attached. Click [🚀 Open in Postman] to auto-copy & launch, or copy from the box below."
 
         var bodyElements: [[String: Any]] = [
             [
@@ -86,6 +97,20 @@ public struct TeamsAdaptiveCardBuilder {
                         "text": codeFenceBlock,
                         "wrap": true,
                         "fontType": "Monospace"
+                    ],
+                    [
+                        "type": "TextBlock",
+                        "text": "📋 Quick-Copy Field (Click inside & press Cmd+A / Cmd+C):",
+                        "isSubtle": true,
+                        "size": "Small",
+                        "spacing": "Small"
+                    ],
+                    [
+                        "type": "Input.Text",
+                        "id": "curlQuickCopy",
+                        "isMultiline": true,
+                        "value": curlString,
+                        "spacing": "None"
                     ]
                 ]
             ],
@@ -240,10 +265,14 @@ public struct TeamsAdaptiveCardBuilder {
             }
         }
 
+        let effectiveDeepLink = (postmanDeepLink?.isEmpty == false)
+            ? postmanDeepLink
+            : PostmanLinkBuilder.buildImportLink(curlString: curl, transaction: transaction)
+
         return buildPayload(
             curlString: curl,
             diagnostics: diagnostics,
-            postmanDeepLink: postmanDeepLink,
+            postmanDeepLink: effectiveDeepLink,
             developerNote: developerNote,
             userDetails: resolvedUser,
             maskTokens: maskTokens
